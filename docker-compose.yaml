@@ -4,6 +4,7 @@ services:
     container_name: hivemq
     ports:
       - "1883:1883"
+      - "8083:8000"
     networks:
       - umh-network
     restart: unless-stopped
