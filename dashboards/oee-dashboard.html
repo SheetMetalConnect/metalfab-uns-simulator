@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MetalFab OEE Deep Dive</title>
+    <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-bottom: 1px solid #334155;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .header-left select {
+            background: #1e293b;
+            color: #e2e8f0;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .header-right {
+            font-size: 13px;
+            color: #94a3b8;
+            text-align: right;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .conn-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: #ef4444;
+            display: inline-block;
+        }
+        .conn-dot.on { background: #10b981; }
+
+        /* KPI row */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 16px;
+            padding: 20px 24px;
+        }
+        .kpi-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .kpi-card.highlight {
+            background: linear-gradient(135deg, #1e293b 0%, #172554 100%);
+            border-color: #1d4ed8;
+        }
+        .kpi-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+        .kpi-value {
+            font-size: 42px;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+        .kpi-value .unit { font-size: 20px; font-weight: 400; color: #94a3b8; }
+        .kpi-bar {
+            height: 4px;
+            border-radius: 2px;
+            background: #334155;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .kpi-bar-fill { height: 100%; border-radius: 2px; transition: width 0.6s; }
+        .kpi-subtitle { font-size: 12px; color: #64748b; }
+
+        /* Charts grid */
+        .charts-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+            padding: 0 24px 16px;
+        }
+        .charts-bottom {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            padding: 0 24px 24px;
+        }
+        .chart-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .chart-title {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+        .chart-subtitle { font-size: 12px; color: #64748b; margin-bottom: 16px; }
+
+        /* State timeline */
+        .timeline-bar {
+            height: 28px;
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+            margin-bottom: 8px;
+            background: #334155;
+        }
+        .timeline-segment {
+            height: 100%;
+            transition: width 0.5s;
+            min-width: 0;
+        }
+        .timeline-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #64748b;
+            margin-bottom: 16px;
+        }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+        }
+        .legend-dot {
+            width: 10px; height: 10px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        .legend-time { color: #94a3b8; margin-left: 4px; }
+
+        /* Loss driver */
+        .loss-driver {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-top: 12px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .loss-driver-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: #f59e0b;
+            margin-bottom: 4px;
+        }
+
+        /* Pareto table */
+        .pareto-table {
+            width: 100%;
+            font-size: 13px;
+            margin-top: 12px;
+        }
+        .pareto-table td {
+            padding: 4px 8px;
+            border-bottom: 1px solid #1e293b;
+        }
+        .pareto-table .cat-dot {
+            width: 8px; height: 8px;
+            border-radius: 2px;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        .pareto-table .pct { color: #94a3b8; text-align: right; }
+        .pareto-table .dur { text-align: right; color: #e2e8f0; }
+
+        /* Window selector */
+        .window-selector {
+            display: flex;
+            gap: 4px;
+        }
+        .window-btn {
+            background: #1e293b;
+            border: 1px solid #475569;
+            color: #94a3b8;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .window-btn.active {
+            background: #334155;
+            color: #e2e8f0;
+            border-color: #3b82f6;
+        }
+
+        @media (max-width: 900px) {
+            .kpi-row { grid-template-columns: 1fr 1fr; }
+            .charts-bottom { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+    <div class="header-left">
+        <select id="machineSelect" onchange="switchMachine(this.value)">
+            <option value="">Waiting for data...</option>
+        </select>
+        <div class="window-selector">
+            <button class="window-btn" onclick="setWindow(15)">15m</button>
+            <button class="window-btn active" onclick="setWindow(60)">1h</button>
+            <button class="window-btn" onclick="setWindow(240)">4h</button>
+            <button class="window-btn" onclick="setWindow(480)">8h</button>
+        </div>
+    </div>
+    <div class="header-right">
+        <span id="timeRange">--:-- &ndash; --:--</span>
+        <span>|</span>
+        <span id="dateStr">--</span>
+        <span>|</span>
+        <span id="machineLabel">--</span>
+        <span class="conn-dot" id="connDot"></span>
+    </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="kpi-row">
+    <div class="kpi-card" id="kpiAvail">
+        <div class="kpi-label">Availability</div>
+        <div class="kpi-value" id="valAvail">--<span class="unit">%</span></div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" id="barAvail"></div></div>
+        <div class="kpi-subtitle" id="subAvail">-- min running / -- min</div>
+    </div>
+    <div class="kpi-card" id="kpiPerf">
+        <div class="kpi-label">Performance</div>
+        <div class="kpi-value" id="valPerf">--<span class="unit">%</span></div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" id="barPerf"></div></div>
+        <div class="kpi-subtitle" id="subPerf">Actual vs ideal rate</div>
+    </div>
+    <div class="kpi-card" id="kpiQual">
+        <div class="kpi-label">Quality</div>
+        <div class="kpi-value" id="valQual">--<span class="unit">%</span></div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" id="barQual"></div></div>
+        <div class="kpi-subtitle" id="subQual">-- good &middot; -- rejected</div>
+    </div>
+    <div class="kpi-card highlight" id="kpiOEE">
+        <div class="kpi-label">OEE</div>
+        <div class="kpi-value" id="valOEE">--<span class="unit">%</span></div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" id="barOEE"></div></div>
+        <div class="kpi-subtitle">A &times; P &times; Q</div>
+    </div>
+</div>
+
+<!-- OEE Component Breakdown -->
+<div class="charts-row">
+    <div class="chart-card">
+        <div class="chart-title">OEE Component Breakdown</div>
+        <div style="height: 200px; position: relative;">
+            <canvas id="breakdownChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Pareto + Timeline -->
+<div class="charts-bottom">
+    <div class="chart-card">
+        <div class="chart-title">Downtime Pareto</div>
+        <div class="chart-subtitle" id="paretoSubtitle">Total lost: -- min of -- min window</div>
+        <div style="height: 200px; position: relative;">
+            <canvas id="paretoChart"></canvas>
+        </div>
+        <table class="pareto-table" id="paretoTable">
+            <tbody></tbody>
+        </table>
+    </div>
+    <div class="chart-card">
+        <div class="chart-title">State Timeline</div>
+        <div class="chart-subtitle" id="timelineSubtitle">-- &rarr; -- (proportional)</div>
+        <div class="timeline-bar" id="timelineBar"></div>
+        <div class="timeline-labels" id="timelineLabels"></div>
+        <div class="legend" id="timelineLegend"></div>
+        <div class="loss-driver" id="lossDriver">
+            <div class="loss-driver-label">Primary Loss Driver</div>
+            <div id="lossDriverText">Collecting data...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Configuration ──
+const MQTT_BROKER = 'ws://localhost:8083/mqtt';
+const SITE = 'eindhoven';
+const TOPIC_BASE = `umh/v1/metalfab/${SITE}`;
+let WINDOW_MINUTES = 60;
+
+// State → category mapping
+const STATE_CATEGORIES = {
+    EXECUTE:    { label: 'RUNNING',    color: '#10b981', productive: true },
+    IDLE:       { label: 'IDLE',       color: '#f59e0b', productive: false },
+    HELD:       { label: 'DOWNTIME',   color: '#ef4444', productive: false },
+    STARTING:   { label: 'CHANGEOVER', color: '#f97316', productive: false },
+    COMPLETING: { label: 'CHANGEOVER', color: '#f97316', productive: false },
+    STOPPED:    { label: 'STOPPED',    color: '#6b7280', productive: false },
+    SUSPENDED:  { label: 'SUSPENDED',  color: '#8b5cf6', productive: false },
+    ABORTED:    { label: 'FAULT',      color: '#dc2626', productive: false },
+};
+
+const CATEGORY_COLORS = {
+    RUNNING:    '#10b981',
+    IDLE:       '#f59e0b',
+    DOWNTIME:   '#ef4444',
+    CHANGEOVER: '#f97316',
+    STOPPED:    '#6b7280',
+    SUSPENDED:  '#8b5cf6',
+    FAULT:      '#dc2626',
+};
+
+const IDEAL_RATES = {
+    laser_cutter: 30, press_brake: 45, robot_weld: 20,
+    manual_weld: 12, assembly: 25, powder_coating_line: 15,
+    quality_control: 40, agv: 60,
+};
+
+// ── State ──
+const machineData = {};  // key → { asset, job, oee, state, outfeed, waste, machineType }
+const stateLog = {};     // key → [{ t, state, category }]
+let selectedMachine = null;
+let client = null;
+let dbReady = false;
+let db = null;
+
+// ── IndexedDB for persistence ──
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open('metalfab_oee', 2);
+        req.onupgradeneeded = (e) => {
+            const d = e.target.result;
+            if (!d.objectStoreNames.contains('stateLog')) {
+                const store = d.createObjectStore('stateLog', { keyPath: 'id', autoIncrement: true });
+                store.createIndex('machine_time', ['machine', 't']);
+            }
+        };
+        req.onsuccess = (e) => { db = e.target.result; dbReady = true; resolve(db); };
+        req.onerror = (e) => { console.warn('IndexedDB not available, using memory only'); resolve(null); };
+    });
+}
+
+function persistState(machine, entry) {
+    if (!db) return;
+    const tx = db.transaction('stateLog', 'readwrite');
+    tx.objectStore('stateLog').add({ machine, t: entry.t, state: entry.state, category: entry.category });
+}
+
+function loadStateLog(machine) {
+    return new Promise((resolve) => {
+        if (!db) { resolve([]); return; }
+        const cutoff = Date.now() - (WINDOW_MINUTES * 60 * 1000);
+        const tx = db.transaction('stateLog', 'readonly');
+        const store = tx.objectStore('stateLog');
+        const results = [];
+        store.openCursor().onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+                const v = cursor.value;
+                if (v.machine === machine && v.t >= cutoff) {
+                    results.push({ t: v.t, state: v.state, category: v.category });
+                }
+                cursor.continue();
+            } else {
+                resolve(results);
+            }
+        };
+    });
+}
+
+function pruneDB() {
+    if (!db) return;
+    const cutoff = Date.now() - (8 * 60 * 60 * 1000); // keep max 8h
+    const tx = db.transaction('stateLog', 'readwrite');
+    const store = tx.objectStore('stateLog');
+    store.openCursor().onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+            if (cursor.value.t < cutoff) cursor.delete();
+            cursor.continue();
+        }
+    };
+}
+
+// ── Chart.js setup ──
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = '#334155';
+
+let breakdownChart, paretoChart;
+
+function initCharts() {
+    const bCtx = document.getElementById('breakdownChart').getContext('2d');
+    breakdownChart = new Chart(bCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Availability', 'Performance', 'Quality', 'OEE'],
+            datasets: [{
+                data: [0, 0, 0, 0],
+                backgroundColor: ['#334155', '#334155', '#334155', '#334155'],
+                borderRadius: 4,
+                barThickness: 60,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                annotation: {
+                    annotations: {
+                        worldClass: {
+                            type: 'line',
+                            yMin: 85, yMax: 85,
+                            borderColor: '#f59e0b',
+                            borderWidth: 2,
+                            borderDash: [6, 4],
+                            label: {
+                                display: true,
+                                content: 'World Class 85%',
+                                position: 'end',
+                                color: '#f59e0b',
+                                font: { size: 11 },
+                                backgroundColor: 'transparent',
+                            }
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    min: 0, max: 100,
+                    ticks: { callback: v => v + '%' },
+                    grid: { color: '#1e293b' }
+                },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    const pCtx = document.getElementById('paretoChart').getContext('2d');
+    paretoChart = new Chart(pCtx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    type: 'bar',
+                    data: [],
+                    backgroundColor: [],
+                    borderRadius: 4,
+                    barThickness: 40,
+                    yAxisID: 'y',
+                },
+                {
+                    type: 'line',
+                    data: [],
+                    borderColor: '#94a3b8',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#94a3b8',
+                    pointRadius: 4,
+                    fill: false,
+                    yAxisID: 'y1',
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    position: 'left',
+                    min: 0,
+                    title: { display: true, text: 'Minutes', color: '#64748b', font: { size: 11 } },
+                    grid: { color: '#1e293b' },
+                },
+                y1: {
+                    position: 'right',
+                    min: 0, max: 100,
+                    ticks: { callback: v => v + '%' },
+                    grid: { display: false },
+                },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+// ── Color helpers ──
+function valueColor(pct) {
+    if (pct >= 75) return '#10b981';
+    if (pct >= 50) return '#f59e0b';
+    return '#ef4444';
+}
+
+// ── MQTT ──
+function connectMQTT() {
+    client = mqtt.connect(MQTT_BROKER, { reconnectPeriod: 2000, connectTimeout: 10000 });
+
+    client.on('connect', () => {
+        document.getElementById('connDot').classList.add('on');
+        const topics = [
+            `${TOPIC_BASE}/+/+/Dashboard/OEE`,
+            `${TOPIC_BASE}/+/+/Dashboard/Asset`,
+            `${TOPIC_BASE}/+/+/Dashboard/Job`,
+            `${TOPIC_BASE}/+/+/Edge/StateName`,
+            `${TOPIC_BASE}/+/+/Line/Outfeed`,
+            `${TOPIC_BASE}/+/+/Line/Waste`,
+        ];
+        topics.forEach(t => client.subscribe(t));
+    });
+
+    client.on('offline', () => {
+        document.getElementById('connDot').classList.remove('on');
+    });
+
+    client.on('message', (topic, message) => {
+        const parts = topic.split('/');
+        const dept = parts[4];
+        const machine = parts[5];
+        const ns = parts[6];
+        const dataType = parts[7];
+        const key = `${dept}/${machine}`;
+
+        if (!machineData[key]) {
+            machineData[key] = { asset: {}, job: {}, oee: {}, state: 'UNKNOWN', outfeed: 0, waste: 0, machineType: '' };
+            stateLog[key] = [];
+            updateMachineSelector();
+        }
+
+        const raw = message.toString();
+        let data;
+        try { data = JSON.parse(raw); } catch { data = raw; }
+
+        if (ns === 'Dashboard') {
+            if (dataType === 'OEE') machineData[key].oee = data;
+            else if (dataType === 'Asset') {
+                machineData[key].asset = data;
+                machineData[key].machineType = (data.MachineType || machine.replace(/_\d+$/, '')).toLowerCase();
+            }
+            else if (dataType === 'Job') machineData[key].job = data;
+        } else if (ns === 'Edge' && dataType === 'StateName') {
+            const newState = data.toString();
+            if (machineData[key].state !== newState) {
+                const cat = STATE_CATEGORIES[newState] || { label: newState, color: '#6b7280' };
+                const entry = { t: Date.now(), state: newState, category: cat.label };
+                stateLog[key].push(entry);
+                persistState(key, entry);
+                machineData[key].state = newState;
+            }
+        } else if (ns === 'Line') {
+            if (dataType === 'Outfeed') machineData[key].outfeed = parseInt(data) || 0;
+            else if (dataType === 'Waste') machineData[key].waste = parseInt(data) || 0;
+        }
+
+        scheduleRender();
+    });
+}
+
+// ── Machine selector ──
+function updateMachineSelector() {
+    const sel = document.getElementById('machineSelect');
+    const keys = Object.keys(machineData).sort();
+    const current = sel.value;
+
+    sel.innerHTML = '';
+    keys.forEach(k => {
+        const opt = document.createElement('option');
+        opt.value = k;
+        const name = k.split('/')[1].replace(/_/g, ' ').toUpperCase();
+        opt.textContent = `${k.split('/')[0]} / ${name}`;
+        sel.appendChild(opt);
+    });
+
+    if (current && keys.includes(current)) {
+        sel.value = current;
+    } else if (!selectedMachine && keys.length > 0) {
+        sel.value = keys[0];
+        selectedMachine = keys[0];
+    }
+}
+
+function switchMachine(key) {
+    selectedMachine = key;
+    renderAll();
+}
+
+function setWindow(minutes) {
+    WINDOW_MINUTES = minutes;
+    document.querySelectorAll('.window-btn').forEach(b => {
+        b.classList.toggle('active', parseInt(b.textContent) === minutes ||
+            (b.textContent === '1h' && minutes === 60) ||
+            (b.textContent === '4h' && minutes === 240) ||
+            (b.textContent === '8h' && minutes === 480));
+    });
+    // Rewrite active states
+    document.querySelectorAll('.window-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    renderAll();
+}
+
+// ── Render scheduling ──
+let renderPending = false;
+function scheduleRender() {
+    if (renderPending) return;
+    renderPending = true;
+    requestAnimationFrame(() => {
+        renderPending = false;
+        renderAll();
+    });
+}
+
+// ── Main render ──
+function renderAll() {
+    if (!selectedMachine || !machineData[selectedMachine]) return;
+    const m = machineData[selectedMachine];
+    const oee = m.oee || {};
+
+    // Header info
+    const now = new Date();
+    const windowStart = new Date(now.getTime() - WINDOW_MINUTES * 60000);
+    document.getElementById('timeRange').textContent =
+        `${fmt(windowStart)} \u2013 ${fmt(now)}`;
+    document.getElementById('dateStr').textContent =
+        now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const label = selectedMachine.split('/')[1].replace(/_/g, ' ').toUpperCase();
+    document.getElementById('machineLabel').textContent =
+        `${label} \u2013 ${selectedMachine.split('/')[0]}`;
+
+    renderKPIs(oee, m);
+    renderBreakdown(oee);
+    renderTimeline();
+    renderPareto();
+}
+
+function fmt(d) {
+    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+
+// ── KPI Cards ──
+function renderKPIs(oee, m) {
+    const a = (oee.Availability || 0) * 100;
+    const p = (oee.Performance || 0) * 100;
+    const q = (oee.Quality || 0) * 100;
+    const o = (oee.OEE || 0) * 100;
+
+    setKPI('Avail', a, `${(oee.ShiftDurationMinutes * (oee.Availability || 0)).toFixed(1)} min running / ${(oee.ShiftDurationMinutes || 0).toFixed(0)} min`);
+    const idealRate = IDEAL_RATES[m.machineType] || IDEAL_RATES[m.asset.MachineType] || 25;
+    setKPI('Perf', p, `Actual vs ${idealRate} pph ideal rate`);
+    setKPI('Qual', q, `${m.outfeed} good \u00b7 ${m.waste} rejected`);
+    setKPI('OEE', o, null);
+}
+
+function setKPI(id, pct, subtitle) {
+    const color = valueColor(pct);
+    document.getElementById(`val${id}`).innerHTML = `${pct.toFixed(1)}<span class="unit">%</span>`;
+    document.getElementById(`val${id}`).style.color = color;
+    const bar = document.getElementById(`bar${id}`);
+    bar.style.width = `${Math.min(pct, 100)}%`;
+    bar.style.background = color;
+    if (subtitle) document.getElementById(`sub${id}`).textContent = subtitle;
+}
+
+// ── OEE Breakdown Chart ──
+function renderBreakdown(oee) {
+    const vals = [
+        (oee.Availability || 0) * 100,
+        (oee.Performance || 0) * 100,
+        (oee.Quality || 0) * 100,
+        (oee.OEE || 0) * 100,
+    ];
+    breakdownChart.data.datasets[0].data = vals;
+    breakdownChart.data.datasets[0].backgroundColor = vals.map(v => valueColor(v));
+    breakdownChart.update('none');
+}
+
+// ── State Timeline ──
+function renderTimeline() {
+    const cutoff = Date.now() - WINDOW_MINUTES * 60000;
+    const log = (stateLog[selectedMachine] || []).filter(e => e.t >= cutoff);
+
+    if (log.length === 0) {
+        document.getElementById('timelineBar').innerHTML = '';
+        document.getElementById('timelineLegend').innerHTML = '';
+        document.getElementById('timelineSubtitle').textContent = 'Collecting data...';
+        return;
+    }
+
+    const windowMs = WINDOW_MINUTES * 60000;
+    const now = Date.now();
+    const windowStart = now - windowMs;
+
+    // Build segments with durations
+    const segments = [];
+    for (let i = 0; i < log.length; i++) {
+        const start = Math.max(log[i].t, windowStart);
+        const end = (i + 1 < log.length) ? log[i + 1].t : now;
+        const cat = log[i].category;
+        const color = CATEGORY_COLORS[cat] || '#6b7280';
+        segments.push({ category: cat, color, durationMs: end - start });
+    }
+
+    // If first log entry starts after window start, add an unknown gap
+    if (log[0].t > windowStart + 1000) {
+        // Use the state just before the window (or UNKNOWN)
+        const allLog = stateLog[selectedMachine] || [];
+        const before = allLog.filter(e => e.t < windowStart);
+        const prevCat = before.length > 0 ? before[before.length - 1].category : 'IDLE';
+        const prevColor = CATEGORY_COLORS[prevCat] || '#6b7280';
+        segments.unshift({ category: prevCat, color: prevColor, durationMs: log[0].t - windowStart });
+    }
+
+    const totalMs = segments.reduce((s, seg) => s + seg.durationMs, 0);
+
+    // Render bar
+    const bar = document.getElementById('timelineBar');
+    bar.innerHTML = segments.map(seg => {
+        const pct = (seg.durationMs / totalMs * 100).toFixed(2);
+        return `<div class="timeline-segment" style="width:${pct}%;background:${seg.color}" title="${seg.category}: ${(seg.durationMs / 60000).toFixed(1)} min"></div>`;
+    }).join('');
+
+    // Labels
+    const ws = new Date(windowStart);
+    const we = new Date(now);
+    document.getElementById('timelineSubtitle').textContent =
+        `${fmt(ws)} \u2192 ${fmt(we)} (proportional)`;
+
+    const labelCount = 5;
+    const labels = [];
+    for (let i = 0; i <= labelCount; i++) {
+        const t = new Date(windowStart + (windowMs * i / labelCount));
+        labels.push(fmt(t));
+    }
+    document.getElementById('timelineLabels').innerHTML =
+        labels.map(l => `<span>${l}</span>`).join('');
+
+    // Legend with accumulated minutes per category
+    const catMinutes = {};
+    segments.forEach(seg => {
+        catMinutes[seg.category] = (catMinutes[seg.category] || 0) + seg.durationMs / 60000;
+    });
+
+    const orderedCats = Object.entries(catMinutes).sort((a, b) => b[1] - a[1]);
+    document.getElementById('timelineLegend').innerHTML = orderedCats.map(([cat, mins]) =>
+        `<div class="legend-item">
+            <span class="legend-dot" style="background:${CATEGORY_COLORS[cat] || '#6b7280'}"></span>
+            ${cat}<span class="legend-time">${mins.toFixed(1)} min</span>
+        </div>`
+    ).join('');
+
+    // Loss driver
+    const nonProd = orderedCats.filter(([cat]) => cat !== 'RUNNING');
+    const totalLost = nonProd.reduce((s, [, m]) => s + m, 0);
+    if (nonProd.length > 0 && totalLost > 0.5) {
+        const top = nonProd[0];
+        const pct = (top[1] / totalLost * 100).toFixed(0);
+        const oee = machineData[selectedMachine]?.oee || {};
+        const a = oee.Availability || 0;
+        const p = oee.Performance || 0;
+        const q = oee.Quality || 0;
+        let constraint = 'availability';
+        if (p < a && p < q) constraint = 'performance';
+        else if (q < a && q < p) constraint = 'quality';
+        document.getElementById('lossDriverText').innerHTML =
+            `<strong>${top[0]}</strong> consumed <strong>${top[1].toFixed(1)} min</strong> (${pct}% of all downtime). OEE is <strong>${constraint}-constrained</strong> this hour.`;
+    } else {
+        document.getElementById('lossDriverText').textContent = 'Collecting data...';
+    }
+}
+
+// ── Downtime Pareto ──
+function renderPareto() {
+    const cutoff = Date.now() - WINDOW_MINUTES * 60000;
+    const log = (stateLog[selectedMachine] || []);
+    const now = Date.now();
+    const windowStart = now - WINDOW_MINUTES * 60000;
+
+    // Sum minutes per non-productive category within window
+    const catMinutes = {};
+    const allLog = log.length > 0 ? log : [];
+
+    // Find the effective log entries in window (including carry-over from before)
+    const before = allLog.filter(e => e.t < windowStart);
+    const inWindow = allLog.filter(e => e.t >= windowStart);
+
+    // Build effective entries
+    const effective = [];
+    if (before.length > 0) {
+        const last = before[before.length - 1];
+        effective.push({ t: windowStart, state: last.state, category: last.category });
+    }
+    inWindow.forEach(e => effective.push(e));
+
+    for (let i = 0; i < effective.length; i++) {
+        const start = Math.max(effective[i].t, windowStart);
+        const end = (i + 1 < effective.length) ? effective[i + 1].t : now;
+        const cat = effective[i].category;
+        if (cat !== 'RUNNING') {
+            catMinutes[cat] = (catMinutes[cat] || 0) + (end - start) / 60000;
+        }
+    }
+
+    const sorted = Object.entries(catMinutes)
+        .filter(([, m]) => m > 0.1)
+        .sort((a, b) => b[1] - a[1]);
+
+    const totalLost = sorted.reduce((s, [, m]) => s + m, 0);
+
+    document.getElementById('paretoSubtitle').textContent =
+        `Total lost: ${totalLost.toFixed(1)} min of ${WINDOW_MINUTES} min window`;
+
+    // Bar data
+    paretoChart.data.labels = sorted.map(([cat]) => cat);
+    paretoChart.data.datasets[0].data = sorted.map(([, m]) => parseFloat(m.toFixed(1)));
+    paretoChart.data.datasets[0].backgroundColor = sorted.map(([cat]) => CATEGORY_COLORS[cat] || '#6b7280');
+
+    // Cumulative % line
+    let cum = 0;
+    paretoChart.data.datasets[1].data = sorted.map(([, m]) => {
+        cum += m;
+        return totalLost > 0 ? parseFloat((cum / totalLost * 100).toFixed(1)) : 0;
+    });
+
+    paretoChart.update('none');
+
+    // Table
+    const tbody = document.querySelector('#paretoTable tbody');
+    tbody.innerHTML = sorted.map(([cat, mins]) => {
+        const pct = totalLost > 0 ? (mins / totalLost * 100).toFixed(1) : '0.0';
+        const color = CATEGORY_COLORS[cat] || '#6b7280';
+        return `<tr>
+            <td><span class="cat-dot" style="background:${color}"></span>${cat}</td>
+            <td class="dur">${mins.toFixed(1)} min</td>
+            <td class="pct">${pct}%</td>
+        </tr>`;
+    }).join('');
+}
+
+// ── Init ──
+async function init() {
+    await openDB();
+    initCharts();
+    connectMQTT();
+
+    // Restore state logs from IndexedDB for all machines
+    // (will be populated as machines are discovered)
+
+    // Periodic render and prune
+    setInterval(() => {
+        renderAll();
+        pruneDB();
+    }, 5000);
+}
+
+// On machine discovery, load persisted state log
+const originalUpdate = updateMachineSelector;
+function updateMachineSelector() {
+    const sel = document.getElementById('machineSelect');
+    const keys = Object.keys(machineData).sort();
+    const current = sel.value;
+
+    sel.innerHTML = '';
+    keys.forEach(k => {
+        const opt = document.createElement('option');
+        opt.value = k;
+        const name = k.split('/')[1].replace(/_/g, ' ').toUpperCase();
+        opt.textContent = `${k.split('/')[0]} / ${name}`;
+        sel.appendChild(opt);
+    });
+
+    if (current && keys.includes(current)) {
+        sel.value = current;
+    } else if (!selectedMachine && keys.length > 0) {
+        sel.value = keys[0];
+        selectedMachine = keys[0];
+    }
+
+    // Load persisted state data for new machines
+    keys.forEach(async (k) => {
+        if (stateLog[k] && stateLog[k]._loaded) return;
+        const persisted = await loadStateLog(k);
+        if (persisted.length > 0) {
+            // Merge: persisted entries that aren't already in memory
+            const existing = new Set((stateLog[k] || []).map(e => e.t));
+            const merged = [...(stateLog[k] || [])];
+            persisted.forEach(e => { if (!existing.has(e.t)) merged.push(e); });
+            merged.sort((a, b) => a.t - b.t);
+            stateLog[k] = merged;
+        }
+        if (!stateLog[k]) stateLog[k] = [];
+        stateLog[k]._loaded = true;
+    });
+}
+
+init();
+</script>
+</body>
+</html>

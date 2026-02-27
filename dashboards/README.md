@@ -8,6 +8,7 @@ Browser-based dashboards that connect to MQTT via WebSocket for live factory mon
 
 | Dashboard | File | Description |
 |-----------|------|-------------|
+| OEE Deep Dive | `oee-dashboard.html` | Single-machine OEE drill-down: A/P/Q breakdown, downtime Pareto, state timeline |
 | Factory Overview | `eindhoven-overview.html` | Machine status, jobs, OEE for all Eindhoven assets |
 | Premium Dashboard | `eindhoven-premium.html` | Enhanced visuals with sparkline charts and trends |
 | Powder Coating Line | `coating_line_dashboard.html` | Zone tracking, RAL colors, process flow |
