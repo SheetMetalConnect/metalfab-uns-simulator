@@ -1,0 +1,89 @@
+# MetalFab UNS Simulator Configuration
+# =====================================
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │ QUICK TOGGLES                                                               │
+# └─────────────────────────────────────────────────────────────────────────────┘
+
+# Global complexity level (1-4) - applies to ALL sites
+level: 2
+# 1 = Sensors only      (_historian)
+# 2 = Stateful          (+ _state, _meta, _jobs) [DEFAULT]
+# 3 = ERP/MES           (+ _erp, _mes, _analytics)
+# 4 = Full              (+ _dashboard, _event, _alarms)
+
+# Sites to simulate (enable/disable individual sites)
+sites:
+  eindhoven:
+    enabled: true
+    name: "MetalFab Eindhoven HQ"
+    country: NL
+  roeselare:
+    enabled: false
+    name: "MetalFab Roeselare"
+    country: BE
+  brasov:
+    enabled: false
+    name: "MetalFab Brasov"
+    country: RO
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │ MQTT CONNECTION                                                             │
+# └─────────────────────────────────────────────────────────────────────────────┘
+
+mqtt:
+  broker: localhost
+  port: 1883
+  username: ""
+  password: ""
+  client_id: metalfab-simulator
+  qos: 1
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │ UNS TOPIC STRUCTURE                                                         │
+# └─────────────────────────────────────────────────────────────────────────────┘
+
+uns:
+  enterprise: metalfab
+  site: eindhoven  # Default site (used when single-site mode)
+  topic_prefix: umh/v1
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │ SIMULATION SETTINGS                                                         │
+# └─────────────────────────────────────────────────────────────────────────────┘
+
+simulation:
+  tick_interval_ms: 5000  # Base interval (5 seconds)
+  tick_jitter_pct: 30     # ±30% randomization (3500-6500ms range)
+  time_acceleration: 1.0
+  random_seed: null
+  initial_level: 2  # Fallback if 'level' not set
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │ LEVEL REFERENCE                                                             │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# Level 1: Sensors
+#   - Namespaces: _historian
+#   - Data: sensor time-series, basic energy
+#   - Use case: Basic machine monitoring
+#
+# Level 2: Stateful (default)
+#   - Namespaces: _historian, _state, _meta, _jobs
+#   - Data: + machine states, job tracking, AGV positions
+#   - MQTT retain enabled
+#   - Use case: Real-time dashboards
+#
+# Level 3: ERP/MES
+#   - Namespaces: + _erp, _mes, _analytics
+#   - Data: + quality %, margins, lead times, OEE, delivery metrics
+#   - Use case: Business intelligence, KPIs
+#
+# Level 4: Full
+#   - Namespaces: + _dashboard, _event, _alarms
+#   - Data: + aggregated dashboards, events, alarms
+#   - Use case: Complete digital twin
+#
+# Change level at runtime via MQTT:
+#   Topic: metalfab-sim/settings/level
+#   Payload: {"level": 3}

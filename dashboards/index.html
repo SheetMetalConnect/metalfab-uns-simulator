@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MetalFab Dashboards</title>
+    <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            min-height: 100vh;
+            color: #e4e7eb;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        h1 {
+            font-size: 48px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 16px;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: #9ca3af;
+            margin-bottom: 30px;
+        }
+
+        .status-card {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 40px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ef4444;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: #10b981;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-text {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .dashboard-card {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 30px;
+            transition: all 0.3s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(59, 130, 246, 0.5);
+            box-shadow: 0 20px 60px rgba(59, 130, 246, 0.3);
+        }
+
+        .card-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        .card-description {
+            font-size: 14px;
+            color: #9ca3af;
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+
+        .card-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .feature-badge {
+            font-size: 11px;
+            padding: 4px 10px;
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 12px;
+            color: #93c5fd;
+        }
+
+        .card-premium {
+            background: rgba(147, 51, 234, 0.2);
+            border-color: rgba(147, 51, 234, 0.3);
+            color: #e9d5ff;
+        }
+
+        .launch-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .launch-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+        }
+
+        .info-section {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 30px;
+            margin-top: 40px;
+        }
+
+        .info-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 16px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .info-item {
+            display: flex;
+            gap: 12px;
+        }
+
+        .info-item-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .info-item-content {
+            flex: 1;
+        }
+
+        .info-item-label {
+            font-size: 13px;
+            color: #9ca3af;
+            margin-bottom: 4px;
+        }
+
+        .info-item-value {
+            font-size: 14px;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            color: #93c5fd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>MetalFab Dashboards</h1>
+            <div class="subtitle">Real-Time Manufacturing Monitoring</div>
+
+            <div class="status-card">
+                <div class="status-dot" id="mqttDot"></div>
+                <div>
+                    <div class="status-text" id="mqttStatus">Checking connection...</div>
+                    <div style="font-size: 12px; color: #9ca3af;" id="mqttDetails">
+                        <span id="messageCount">0</span> messages
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <a href="eindhoven-overview.html" class="dashboard-card">
+                <div class="card-icon">&#9881;</div>
+                <div class="card-title">Factory Overview</div>
+                <div class="card-description">
+                    Real-time status of all machines and production at the Eindhoven site.
+                </div>
+                <div class="card-features">
+                    <span class="feature-badge">Live Status</span>
+                    <span class="feature-badge">OEE Metrics</span>
+                    <span class="feature-badge">Jobs</span>
+                    <span class="feature-badge">Auto-Update</span>
+                </div>
+                <button class="launch-btn" onclick="event.preventDefault(); window.open('eindhoven-overview.html', '_blank')">
+                    Open Dashboard
+                </button>
+            </a>
+
+            <a href="eindhoven-premium.html" class="dashboard-card">
+                <div class="card-icon">&#9670;</div>
+                <div class="card-title">Premium Dashboard</div>
+                <div class="card-description">
+                    Enhanced factory dashboard with sparkline charts and trend analysis.
+                </div>
+                <div class="card-features">
+                    <span class="feature-badge">Live Charts</span>
+                    <span class="feature-badge">Notifications</span>
+                    <span class="feature-badge">Fullscreen</span>
+                    <span class="feature-badge">Trends</span>
+                </div>
+                <button class="launch-btn" onclick="event.preventDefault(); window.open('eindhoven-premium.html', '_blank')" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+                    Open Dashboard
+                </button>
+            </a>
+
+            <a href="coating_line_dashboard.html" class="dashboard-card">
+                <div class="card-icon">&#9632;</div>
+                <div class="card-title">Powder Coating Line</div>
+                <div class="card-description">
+                    Shared powder coating line with zone tracking, RAL colors and process visualization.
+                </div>
+                <div class="card-features">
+                    <span class="feature-badge">Zone Tracking</span>
+                    <span class="feature-badge">RAL Colors</span>
+                    <span class="feature-badge">Process Flow</span>
+                    <span class="feature-badge">Temperature</span>
+                </div>
+                <button class="launch-btn" onclick="event.preventDefault(); window.open('coating_line_dashboard.html', '_blank')">
+                    Open Monitor
+                </button>
+            </a>
+
+            <a href="warehouse_dashboard.html" class="dashboard-card">
+                <div class="card-icon">&#9638;</div>
+                <div class="card-title">Warehouse &amp; Logistics</div>
+                <div class="card-description">
+                    AGV fleet status, material inventory and warehouse operations monitoring.
+                </div>
+                <div class="card-features">
+                    <span class="feature-badge">AGV Fleet</span>
+                    <span class="feature-badge">Inventory</span>
+                    <span class="feature-badge">Materials</span>
+                    <span class="feature-badge">Logistics</span>
+                </div>
+                <button class="launch-btn" onclick="event.preventDefault(); window.open('warehouse_dashboard.html', '_blank')">
+                    Open Warehouse
+                </button>
+            </a>
+        </div>
+
+        <div class="info-section">
+            <div class="info-title">System Information</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-item-content">
+                        <div class="info-item-label">MQTT Broker</div>
+                        <div class="info-item-value"><code>ws://localhost:8083/mqtt</code></div>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-item-content">
+                        <div class="info-item-label">Site</div>
+                        <div class="info-item-value">Eindhoven, Netherlands</div>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-item-content">
+                        <div class="info-item-label">Simulator</div>
+                        <div class="info-item-value" id="simulatorStatus">Checking...</div>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-item-content">
+                        <div class="info-item-label">Complexity Level</div>
+                        <div class="info-item-value" id="complexityLevel">--</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const MQTT_BROKER = 'ws://localhost:8083/mqtt';
+        let client = null;
+        let messageCount = 0;
+
+        // Connect to MQTT to check status
+        function checkMQTTConnection() {
+            client = mqtt.connect(MQTT_BROKER, {
+                reconnectPeriod: 2000,
+                connectTimeout: 5000
+            });
+
+            client.on('connect', () => {
+                document.getElementById('mqttDot').classList.add('connected');
+                document.getElementById('mqttStatus').textContent = 'Connected to MQTT';
+
+                client.subscribe('metalfab-sim/status');
+                client.subscribe('umh/v1/metalfab/eindhoven/+/+/Dashboard/#');
+            });
+
+            client.on('message', (topic, message) => {
+                messageCount++;
+                document.getElementById('messageCount').textContent = messageCount;
+
+                if (topic === 'metalfab-sim/status') {
+                    try {
+                        const status = JSON.parse(message.toString());
+                        document.getElementById('simulatorStatus').textContent = 'Active';
+                        document.getElementById('complexityLevel').textContent = `Level ${status.level}`;
+                    } catch (e) {
+                        console.error('Failed to parse simulator status:', e);
+                    }
+                }
+            });
+
+            client.on('error', (err) => {
+                document.getElementById('mqttStatus').textContent = 'Connection Failed';
+                document.getElementById('mqttDetails').innerHTML = '<span style="color: #fca5a5;">Check HiveMQ</span>';
+            });
+
+            client.on('offline', () => {
+                document.getElementById('mqttDot').classList.remove('connected');
+                document.getElementById('mqttStatus').textContent = 'Disconnected';
+            });
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            checkMQTTConnection();
+
+            // Update message count display
+            setInterval(() => {
+                if (messageCount > 0) {
+                    document.getElementById('mqttDetails').innerHTML =
+                        `<span style="color: #6ee7b7;">${messageCount} messages received</span>`;
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

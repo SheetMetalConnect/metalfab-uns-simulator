@@ -1,0 +1,41 @@
+# Virtual environments
+.venv/
+venv/
+env/
+mcp-server/venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE and tool config
+.idea/
+.vscode/
+.claude/
+.gemini-clipboard/
+.mcp.json
+*.backup
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Log files
+*.log
+
+# OS-specific
+.DS_Store
+
+# Simulator runtime
+.metalfab-simulator-initialized
+
+# MCP server cache
+mcp-server/src/metalfab_mqtt_cache.json

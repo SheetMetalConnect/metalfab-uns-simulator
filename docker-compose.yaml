@@ -1,0 +1,29 @@
+services:
+  hivemq:
+    image: hivemq/hivemq-ce:latest
+    container_name: hivemq
+    ports:
+      - "1883:1883"
+    networks:
+      - umh-network
+    restart: unless-stopped
+
+  simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: metalfab-simulator
+    environment:
+      - MQTT_BROKER=hivemq
+      - MQTT_PORT=1883
+    command: ["run", "--broker", "hivemq", "--level", "2"]
+    depends_on:
+      - hivemq
+    networks:
+      - umh-network
+    restart: unless-stopped
+
+networks:
+  umh-network:
+    external: true
+    name: deployment_umh-network

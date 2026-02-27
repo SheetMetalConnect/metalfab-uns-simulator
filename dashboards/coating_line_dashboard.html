@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poedercoating Lijn - Eindhoven</title>
+    <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #0a0e1a;
+            color: #e4e7eb;
+            padding: 20px;
+        }
+        
+        .header {
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .subtitle {
+            color: #9ca3af;
+            font-size: 14px;
+        }
+        
+        .connection-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 16px;
+        }
+        
+        .connection-status.connected {
+            background: #065f46;
+            color: #6ee7b7;
+        }
+        
+        .connection-status.disconnected {
+            background: #7f1d1d;
+            color: #fca5a5;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+        
+        .metric-card {
+            background: #1a1f2e;
+            border: 1px solid #2d3548;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .metric-value {
+            font-size: 32px;
+            font-weight: 600;
+            color: #fff;
+        }
+        
+        .metric-unit {
+            font-size: 16px;
+            color: #9ca3af;
+            margin-left: 4px;
+        }
+        
+        .color-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .color-swatch {
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            border: 2px solid #2d3548;
+            background: #000;
+        }
+        
+        .color-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        
+        .color-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+        }
+        
+        .color-code {
+            font-size: 12px;
+            color: #9ca3af;
+        }
+        
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 20px;
+        }
+        
+        .line-visualization {
+            background: #1a1f2e;
+            border: 1px solid #2d3548;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .zones-container {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            overflow-x: auto;
+            padding: 20px 0;
+        }
+        
+        .zone {
+            flex: 0 0 auto;
+            width: 140px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .zone-icon {
+            width: 100%;
+            height: 120px;
+            background: #0f1419;
+            border: 2px solid #2d3548;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .zone-icon.active {
+            border-color: #3b82f6;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+        }
+        
+        .zone-count {
+            font-size: 36px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+        
+        .zone-emoji {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        
+        .zone-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .zone-parts {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+        
+        .arrow {
+            font-size: 24px;
+            color: #3b82f6;
+            flex: 0 0 auto;
+        }
+        
+        .process-flow {
+            background: #0f1419;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .flow-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #9ca3af;
+            margin-bottom: 12px;
+        }
+        
+        .flow-bar {
+            height: 40px;
+            background: #1a1f2e;
+            border-radius: 6px;
+            display: flex;
+            overflow: hidden;
+            border: 1px solid #2d3548;
+        }
+        
+        .flow-segment {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            color: #fff;
+            transition: all 0.3s;
+        }
+        
+        .segment-loading {
+            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+        }
+        
+        .segment-pretreatment {
+            background: linear-gradient(135deg, #7c2d12 0%, #9a3412 100%);
+        }
+        
+        .segment-drying {
+            background: linear-gradient(135deg, #713f12 0%, #92400e 100%);
+        }
+        
+        .segment-coating {
+            background: linear-gradient(135deg, #065f46 0%, #047857 100%);
+        }
+        
+        .segment-curing {
+            background: linear-gradient(135deg, #7c2d12 0%, #991b1b 100%);
+        }
+        
+        .segment-cooling {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+        }
+        
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+        
+        .detail-card {
+            background: #1a1f2e;
+            border: 1px solid #2d3548;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .detail-title {
+            font-size: 13px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+        
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #0f1419;
+        }
+        
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        
+        .detail-label {
+            font-size: 13px;
+            color: #9ca3af;
+        }
+        
+        .detail-value {
+            font-size: 13px;
+            color: #fff;
+            font-weight: 600;
+        }
+        
+        .temp-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .temp-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+        }
+        
+        .temp-normal {
+            background: #065f46;
+            box-shadow: 0 0 10px #10b981;
+        }
+        
+        .temp-high {
+            background: #dc2626;
+            box-shadow: 0 0 10px #ef4444;
+        }
+        
+        .updated-indicator {
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            🎨 Poedercoating Lijn
+        </h1>
+        <div class="subtitle">
+            Eindhoven Finishing • Updated: <span id="timestamp"></span>
+            <span id="connectionStatus" class="connection-status" style="margin-left: 16px;">
+                <span class="status-dot"></span>
+                Verbinding maken...
+            </span>
+        </div>
+    </div>
+    
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-label">Parts in Line</div>
+            <div class="metric-value" id="partsInLine">--<span class="metric-unit"></span></div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Traversals</div>
+            <div class="metric-value" id="traversalsInLine">--<span class="metric-unit"></span></div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Oven Temp</div>
+            <div class="metric-value" id="ovenTemp">--<span class="metric-unit">°C</span></div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Conveyor Speed</div>
+            <div class="metric-value" id="conveyorSpeed">--<span class="metric-unit">m/min</span></div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Current Color</div>
+            <div class="color-indicator">
+                <div class="color-swatch" id="colorSwatch"></div>
+                <div class="color-info">
+                    <div class="color-name" id="colorName">--</div>
+                    <div class="color-code" id="colorCode">--</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="line-visualization">
+        <div class="section-title">Process Flow</div>
+        
+        <div class="zones-container" id="zonesContainer">
+            <div class="zone">
+                <div class="zone-icon" id="zone-loading">
+                    <div class="zone-emoji">📥</div>
+                    <div class="zone-count" id="count-loading">0</div>
+                </div>
+                <div class="zone-label">Loading</div>
+                <div class="zone-parts">parts</div>
+            </div>
+            
+            <div class="arrow">→</div>
+            
+            <div class="zone">
+                <div class="zone-icon" id="zone-pretreatment">
+                    <div class="zone-emoji">🧪</div>
+                    <div class="zone-count" id="count-pretreatment">0</div>
+                </div>
+                <div class="zone-label">Pre-Treatment</div>
+                <div class="zone-parts">parts</div>
+            </div>
+            
+            <div class="arrow">→</div>
+            
+            <div class="zone">
+                <div class="zone-icon" id="zone-drying">
+                    <div class="zone-emoji">💨</div>
+                    <div class="zone-count" id="count-drying">0</div>
+                </div>
+                <div class="zone-label">Drying</div>
+                <div class="zone-parts">parts</div>
+            </div>
+            
+            <div class="arrow">→</div>
+            
+            <div class="zone">
+                <div class="zone-icon" id="zone-coating">
+                    <div class="zone-emoji">🎨</div>
+                    <div class="zone-count" id="count-coating">0</div>
+                </div>
+                <div class="zone-label">Coating</div>
+                <div class="zone-parts">parts</div>
+            </div>
+            
+            <div class="arrow">→</div>
+            
+            <div class="zone">
+                <div class="zone-icon" id="zone-curing">
+                    <div class="zone-emoji">🔥</div>
+                    <div class="zone-count" id="count-curing">0</div>
+                </div>
+                <div class="zone-label">Curing</div>
+                <div class="zone-parts">parts</div>
+            </div>
+            
+            <div class="arrow">→</div>
+            
+            <div class="zone">
+                <div class="zone-icon" id="zone-cooling">
+                    <div class="zone-emoji">❄️</div>
+                    <div class="zone-count" id="count-cooling">0</div>
+                </div>
+                <div class="zone-label">Cooling</div>
+                <div class="zone-parts">parts</div>
+            </div>
+        </div>
+        
+        <div class="process-flow">
+            <div class="flow-title">Zone Distribution</div>
+            <div class="flow-bar" id="flowBar"></div>
+        </div>
+    </div>
+    
+    <div class="details-grid">
+        <div class="detail-card">
+            <div class="detail-title">Process Parameters</div>
+            <div class="detail-row">
+                <span class="detail-label">Booth Humidity</span>
+                <span class="detail-value" id="boothHumidity">--</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Oven Temperature</span>
+                <span class="detail-value">
+                    <span class="temp-indicator">
+                        <span class="temp-icon temp-normal" id="tempIcon"></span>
+                        <span id="ovenTempDetail">--°C</span>
+                    </span>
+                </span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Conveyor Speed</span>
+                <span class="detail-value" id="conveyorSpeedDetail">--</span>
+            </div>
+        </div>
+        
+        <div class="detail-card">
+            <div class="detail-title">Current Job</div>
+            <div class="detail-row">
+                <span class="detail-label">RAL Code</span>
+                <span class="detail-value" id="ralCode">--</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Color Name</span>
+                <span class="detail-value" id="colorNameDetail">--</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Last Change</span>
+                <span class="detail-value" id="lastColorChange">--</span>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const MQTT_BROKER = 'ws://localhost:8083/mqtt';
+        const SITE = 'eindhoven';
+        const COATING_LINE = 'coating_line_01';
+        const TOPIC_BASE = `umh/v1/metalfab/${SITE}/finishing/${COATING_LINE}`;
+
+        let client = null;
+        let messageCount = 0;
+
+        const RAL_COLORS = {
+            'RAL 9005': '#0a0a0d',
+            'RAL 9016': '#f1f0ea',
+            'RAL 7035': '#d0d4d6',
+            'RAL 3020': '#bb1e10',
+            'RAL 5015': '#007cb0',
+            'RAL 6018': '#61993b',
+            'RAL 1021': '#f6b600'
+        };
+
+        // Live data storage
+        let liveData = {
+            summary: {},
+            zones: {},
+            edge: {}
+        };
+
+        // Connect to MQTT
+        function connectMQTT() {
+            console.log('Verbinden met MQTT:', MQTT_BROKER);
+
+            client = mqtt.connect(MQTT_BROKER, {
+                reconnectPeriod: 1000,
+                connectTimeout: 30000
+            });
+
+            client.on('connect', () => {
+                console.log('Verbonden met MQTT broker');
+                updateConnectionStatus(true);
+
+                // Subscribe to coating line topics
+                const topics = [
+                    `${TOPIC_BASE}/Dashboard/#`,
+                    `${TOPIC_BASE}/Line/#`,
+                    `${TOPIC_BASE}/Edge/#`
+                ];
+
+                topics.forEach(topic => {
+                    client.subscribe(topic, (err) => {
+                        if (!err) console.log('Geabonneerd op:', topic);
+                    });
+                });
+            });
+
+            client.on('message', handleMessage);
+            client.on('error', (err) => {
+                console.error('MQTT Fout:', err);
+                updateConnectionStatus(false);
+            });
+            client.on('offline', () => updateConnectionStatus(false));
+        }
+
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connectionStatus');
+            if (connected) {
+                status.className = 'connection-status connected';
+                status.innerHTML = '<span class="status-dot"></span> Verbonden';
+            } else {
+                status.className = 'connection-status disconnected';
+                status.innerHTML = '<span class="status-dot"></span> Niet verbonden';
+            }
+        }
+
+        // Handle incoming MQTT messages
+        function handleMessage(topic, message) {
+            messageCount++;
+            const payload = message.toString();
+            console.log('📨 Ontvangen:', topic);
+
+            try {
+                // Dashboard/Summary - contains all main metrics
+                if (topic.includes('/Dashboard/Summary')) {
+                    const data = JSON.parse(payload);
+                    console.log('✅ Summary data:', data);
+                    liveData.summary = data;
+                    updateSummary(data);
+                    // Summary also contains OvenTemp
+                    if (data.OvenTemp) {
+                        updateOvenTemp(data.OvenTemp);
+                    }
+                }
+                // Line/Zones/{ZoneName} - individual zone updates
+                else if (topic.includes('/Line/Zones/')) {
+                    const zoneName = topic.split('/').pop();
+                    const count = parseInt(payload);
+                    console.log(`✅ Zone ${zoneName}:`, count);
+                    if (!liveData.zones) liveData.zones = {};
+                    liveData.zones[zoneName] = count;
+                    updateZones(liveData.zones);
+                }
+                // Edge data
+                else if (topic.includes('/Edge/')) {
+                    const parts = topic.split('/');
+                    const dataType = parts[parts.length - 1];
+                    console.log('✅ Edge data:', dataType, '=', payload);
+
+                    if (dataType === 'BoothHumidity') {
+                        updateHumidity(parseFloat(payload));
+                    } else if (dataType === 'ConveyorSpeed') {
+                        updateConveyorSpeed(parseFloat(payload));
+                    } else if (dataType === 'OvenTemp') {
+                        updateOvenTemp(parseFloat(payload));
+                    }
+                }
+
+            } catch (e) {
+                console.error('❌ Fout bij verwerken:', topic, e);
+            }
+        }
+
+        function refreshData() {
+            console.log('Manual refresh requested');
+            // The data is already live, so just trigger visual feedback
+            if (event && event.target) {
+                const refreshBtn = event.target;
+                refreshBtn.style.transform = 'rotate(360deg)';
+                refreshBtn.style.transition = 'transform 0.5s';
+                setTimeout(() => {
+                    refreshBtn.style.transform = 'rotate(0deg)';
+                }, 500);
+            }
+        }
+        
+        function updateSummary(data) {
+            document.getElementById('partsInLine').innerHTML = `${data.PartsInLine}<span class="metric-unit"></span>`;
+            document.getElementById('traversalsInLine').innerHTML = `${data.TraversalsInLine}<span class="metric-unit"></span>`;
+            document.getElementById('ovenTemp').innerHTML = `${data.OvenTemp.toFixed(1)}<span class="metric-unit">°C</span>`;
+            
+            // Update color
+            document.getElementById('colorName').textContent = data.CurrentColor;
+            document.getElementById('colorCode').textContent = data.CurrentRAL;
+            document.getElementById('colorNameDetail').textContent = data.CurrentColor;
+            document.getElementById('ralCode').textContent = data.CurrentRAL;
+            
+            const colorHex = RAL_COLORS[data.CurrentRAL] || '#000000';
+            document.getElementById('colorSwatch').style.background = colorHex;
+            
+            // Update last color change
+            const changeDate = new Date(data.LastColorChange);
+            const now = new Date();
+            const diffMinutes = Math.floor((now - changeDate) / 60000);
+            let timeAgo = diffMinutes < 60 ? `${diffMinutes}m ago` : `${Math.floor(diffMinutes / 60)}h ago`;
+            document.getElementById('lastColorChange').textContent = timeAgo;
+            
+            document.getElementById('partsInLine').classList.add('updated-indicator');
+            setTimeout(() => {
+                document.getElementById('partsInLine').classList.remove('updated-indicator');
+            }, 500);
+        }
+        
+        function updateZones(zones) {
+            const zoneNames = ['Loading', 'PreTreatment', 'Drying', 'Coating', 'Curing', 'Cooling'];
+            const total = Object.values(zones).reduce((sum, val) => sum + val, 0);
+            
+            zoneNames.forEach(name => {
+                const count = zones[name] || 0;
+                const countEl = document.getElementById(`count-${name.toLowerCase()}`);
+                const zoneEl = document.getElementById(`zone-${name.toLowerCase()}`);
+                
+                if (countEl) {
+                    countEl.textContent = count;
+                    countEl.classList.add('updated-indicator');
+                    setTimeout(() => {
+                        countEl.classList.remove('updated-indicator');
+                    }, 500);
+                }
+                
+                if (zoneEl) {
+                    if (count > 0) {
+                        zoneEl.classList.add('active');
+                    } else {
+                        zoneEl.classList.remove('active');
+                    }
+                }
+            });
+            
+            // Update flow bar
+            const flowBar = document.getElementById('flowBar');
+            flowBar.innerHTML = '';
+            
+            zoneNames.forEach(name => {
+                const count = zones[name] || 0;
+                if (count > 0) {
+                    const percent = (count / total * 100).toFixed(1);
+                    const segment = document.createElement('div');
+                    segment.className = `flow-segment segment-${name.toLowerCase()}`;
+                    segment.style.width = `${percent}%`;
+                    segment.textContent = `${name}: ${count}`;
+                    flowBar.appendChild(segment);
+                }
+            });
+        }
+        
+        function updateHumidity(humidity) {
+            document.getElementById('boothHumidity').textContent = `${humidity.toFixed(1)}%`;
+        }
+        
+        function updateConveyorSpeed(speed) {
+            document.getElementById('conveyorSpeed').innerHTML = `${speed.toFixed(2)}<span class="metric-unit">m/min</span>`;
+            document.getElementById('conveyorSpeedDetail').textContent = `${speed.toFixed(2)} m/min`;
+        }
+        
+        function updateOvenTemp(temp) {
+            document.getElementById('ovenTempDetail').textContent = `${temp.toFixed(1)}°C`;
+            
+            const tempIcon = document.getElementById('tempIcon');
+            if (temp > 200) {
+                tempIcon.className = 'temp-icon temp-high';
+            } else {
+                tempIcon.className = 'temp-icon temp-normal';
+            }
+        }
+        
+        function updateTimestamp() {
+            const now = new Date();
+            document.getElementById('timestamp').textContent = now.toLocaleTimeString();
+        }
+        
+        // Initialize on load
+        window.addEventListener('load', () => {
+            updateTimestamp();
+            setInterval(updateTimestamp, 1000);
+            connectMQTT();
+        });
+    </script>
+</body>
+</html>
