@@ -227,6 +227,12 @@
 </head>
 <body>
 
+<!-- Breadcrumb -->
+<div style="background: #0f172a; border-bottom: 1px solid #1e293b; padding: 8px 24px; font-size: 13px; color: #94a3b8;">
+    <a href="eindhoven-premium.html" style="color: #60a5fa; text-decoration: none;">&larr; Factory Overview</a>
+    &nbsp;|&nbsp; OEE Deep Dive &mdash; <span id="breadcrumbMachine">--</span>
+</div>
+
 <!-- Header -->
 <div class="header">
     <div class="header-left">
@@ -320,26 +326,30 @@ const SITE = 'eindhoven';
 const TOPIC_BASE = `umh/v1/metalfab/${SITE}`;
 let WINDOW_MINUTES = 60;
 
-// State → category mapping
-const STATE_CATEGORIES = {
-    EXECUTE:    { label: 'RUNNING',    color: '#10b981', productive: true },
-    IDLE:       { label: 'IDLE',       color: '#f59e0b', productive: false },
-    HELD:       { label: 'DOWNTIME',   color: '#ef4444', productive: false },
-    STARTING:   { label: 'CHANGEOVER', color: '#f97316', productive: false },
-    COMPLETING: { label: 'CHANGEOVER', color: '#f97316', productive: false },
-    STOPPED:    { label: 'STOPPED',    color: '#6b7280', productive: false },
-    SUSPENDED:  { label: 'SUSPENDED',  color: '#8b5cf6', productive: false },
-    ABORTED:    { label: 'FAULT',      color: '#dc2626', productive: false },
-};
-
+// Stop category → color mapping (for timeline and Pareto)
 const CATEGORY_COLORS = {
     RUNNING:    '#10b981',
-    IDLE:       '#f59e0b',
-    DOWNTIME:   '#ef4444',
-    CHANGEOVER: '#f97316',
-    STOPPED:    '#6b7280',
-    SUSPENDED:  '#8b5cf6',
-    FAULT:      '#dc2626',
+    changeover: '#f97316',
+    planned:    '#f59e0b',
+    breakdown:  '#ef4444',
+    microstop:  '#fb923c',
+};
+
+// Fallback: state → category when no stop reason is published yet
+const STATE_FALLBACK = {
+    EXECUTE:    'RUNNING',
+    IDLE:       'changeover',
+    HELD:       'breakdown',
+    STARTING:   'changeover',
+    COMPLETING: 'changeover',
+    STOPPED:    'planned',
+    SUSPENDED:  'planned',
+    ABORTED:    'breakdown',
+};
+
+const CATEGORY_LABELS = {
+    RUNNING: 'Running', changeover: 'Changeover', planned: 'Planned Stop',
+    breakdown: 'Breakdown', microstop: 'Microstop',
 };
 
 const IDEAL_RATES = {
@@ -348,10 +358,14 @@ const IDEAL_RATES = {
     quality_control: 40, agv: 60,
 };
 
+// ── URL param: pre-select machine ──
+const urlParams = new URLSearchParams(window.location.search);
+const urlMachine = urlParams.get('machine'); // e.g. "cutting/laser_01"
+
 // ── State ──
-const machineData = {};  // key → { asset, job, oee, state, outfeed, waste, machineType }
-const stateLog = {};     // key → [{ t, state, category }]
-let selectedMachine = null;
+const machineData = {};  // key → { asset, job, oee, state, outfeed, waste, machineType, stopReason }
+const stateLog = {};     // key → [{ t, state, category, stopCode, stopName }]
+let selectedMachine = urlMachine || null;
 let client = null;
 let dbReady = false;
 let db = null;
@@ -359,7 +373,7 @@ let db = null;
 // ── IndexedDB for persistence ──
 function openDB() {
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open('metalfab_oee', 2);
+        const req = indexedDB.open('metalfab_oee', 3);
         req.onupgradeneeded = (e) => {
             const d = e.target.result;
             if (!d.objectStoreNames.contains('stateLog')) {
@@ -375,7 +389,10 @@ function openDB() {
 function persistState(machine, entry) {
     if (!db) return;
     const tx = db.transaction('stateLog', 'readwrite');
-    tx.objectStore('stateLog').add({ machine, t: entry.t, state: entry.state, category: entry.category });
+    tx.objectStore('stateLog').add({
+        machine, t: entry.t, state: entry.state, category: entry.category,
+        stopCode: entry.stopCode || '', stopName: entry.stopName || '',
+    });
 }
 
 function loadStateLog(machine) {
@@ -390,7 +407,8 @@ function loadStateLog(machine) {
             if (cursor) {
                 const v = cursor.value;
                 if (v.machine === machine && v.t >= cutoff) {
-                    results.push({ t: v.t, state: v.state, category: v.category });
+                    results.push({ t: v.t, state: v.state, category: v.category,
+                        stopCode: v.stopCode || '', stopName: v.stopName || '' });
                 }
                 cursor.continue();
             } else {
@@ -536,6 +554,7 @@ function connectMQTT() {
             `${TOPIC_BASE}/+/+/Dashboard/Asset`,
             `${TOPIC_BASE}/+/+/Dashboard/Job`,
             `${TOPIC_BASE}/+/+/Edge/StateName`,
+            `${TOPIC_BASE}/+/+/Edge/StopReason`,
             `${TOPIC_BASE}/+/+/Line/Outfeed`,
             `${TOPIC_BASE}/+/+/Line/Waste`,
         ];
@@ -555,7 +574,7 @@ function connectMQTT() {
         const key = `${dept}/${machine}`;
 
         if (!machineData[key]) {
-            machineData[key] = { asset: {}, job: {}, oee: {}, state: 'UNKNOWN', outfeed: 0, waste: 0, machineType: '' };
+            machineData[key] = { asset: {}, job: {}, oee: {}, state: 'UNKNOWN', outfeed: 0, waste: 0, machineType: '', stopReason: null };
             stateLog[key] = [];
             updateMachineSelector();
         }
@@ -571,11 +590,32 @@ function connectMQTT() {
                 machineData[key].machineType = (data.MachineType || machine.replace(/_\d+$/, '')).toLowerCase();
             }
             else if (dataType === 'Job') machineData[key].job = data;
+        } else if (ns === 'Edge' && dataType === 'StopReason') {
+            // Backend publishes { code, name, category } on every tick
+            if (data && data.code) {
+                machineData[key].stopReason = data;
+                // Patch latest log entry if it has no stop code yet (race: StateName arrived first)
+                const log = stateLog[key];
+                if (log && log.length > 0) {
+                    const last = log[log.length - 1];
+                    if (!last.stopCode && last.category !== 'RUNNING') {
+                        last.stopCode = data.code;
+                        last.stopName = data.name;
+                        last.category = data.category;
+                    }
+                }
+            } else {
+                machineData[key].stopReason = null;
+            }
         } else if (ns === 'Edge' && dataType === 'StateName') {
             const newState = data.toString();
             if (machineData[key].state !== newState) {
-                const cat = STATE_CATEGORIES[newState] || { label: newState, color: '#6b7280' };
-                const entry = { t: Date.now(), state: newState, category: cat.label };
+                // Determine category: use stopReason from backend, fallback to state mapping
+                const sr = machineData[key].stopReason;
+                const category = (sr && sr.category) ? sr.category : (STATE_FALLBACK[newState] || 'planned');
+                const stopCode = (sr && sr.code) ? sr.code : '';
+                const stopName = (sr && sr.name) ? sr.name : '';
+                const entry = { t: Date.now(), state: newState, category, stopCode, stopName };
                 stateLog[key].push(entry);
                 persistState(key, entry);
                 machineData[key].state = newState;
@@ -614,6 +654,8 @@ function updateMachineSelector() {
 
 function switchMachine(key) {
     selectedMachine = key;
+    const label = key ? key.split('/')[1].replace(/_/g, ' ').toUpperCase() : '--';
+    document.getElementById('breadcrumbMachine').textContent = label;
     renderAll();
 }
 
@@ -748,7 +790,8 @@ function renderTimeline() {
     const bar = document.getElementById('timelineBar');
     bar.innerHTML = segments.map(seg => {
         const pct = (seg.durationMs / totalMs * 100).toFixed(2);
-        return `<div class="timeline-segment" style="width:${pct}%;background:${seg.color}" title="${seg.category}: ${(seg.durationMs / 60000).toFixed(1)} min"></div>`;
+        const catLabel = CATEGORY_LABELS[seg.category] || seg.category;
+        return `<div class="timeline-segment" style="width:${pct}%;background:${seg.color}" title="${catLabel}: ${(seg.durationMs / 60000).toFixed(1)} min"></div>`;
     }).join('');
 
     // Labels
@@ -776,16 +819,32 @@ function renderTimeline() {
     document.getElementById('timelineLegend').innerHTML = orderedCats.map(([cat, mins]) =>
         `<div class="legend-item">
             <span class="legend-dot" style="background:${CATEGORY_COLORS[cat] || '#6b7280'}"></span>
-            ${cat}<span class="legend-time">${mins.toFixed(1)} min</span>
+            ${CATEGORY_LABELS[cat] || cat}<span class="legend-time">${mins.toFixed(1)} min</span>
         </div>`
     ).join('');
 
-    // Loss driver
+    // Loss driver — find top stop-reason (by code if available)
     const nonProd = orderedCats.filter(([cat]) => cat !== 'RUNNING');
     const totalLost = nonProd.reduce((s, [, m]) => s + m, 0);
     if (nonProd.length > 0 && totalLost > 0.5) {
-        const top = nonProd[0];
-        const pct = (top[1] / totalLost * 100).toFixed(0);
+        // Find top specific stop reason from the full log
+        const stopReasonMin = {};
+        const wStart = Date.now() - WINDOW_MINUTES * 60000;
+        const allLogL = (stateLog[selectedMachine] || []);
+        const beforeL = allLogL.filter(e => e.t < wStart);
+        const inWinL = allLogL.filter(e => e.t >= wStart);
+        const effL = [];
+        if (beforeL.length > 0) effL.push({ ...beforeL[beforeL.length - 1], t: wStart });
+        inWinL.forEach(e => effL.push(e));
+        for (let i = 0; i < effL.length; i++) {
+            if (effL[i].category === 'RUNNING') continue;
+            const s = Math.max(effL[i].t, wStart);
+            const en = (i + 1 < effL.length) ? effL[i + 1].t : Date.now();
+            const lbl = effL[i].stopCode ? `${effL[i].stopCode} \u00b7 ${effL[i].stopName}` : effL[i].category;
+            stopReasonMin[lbl] = (stopReasonMin[lbl] || 0) + (en - s) / 60000;
+        }
+        const topReason = Object.entries(stopReasonMin).sort((a, b) => b[1] - a[1])[0];
+
         const oee = machineData[selectedMachine]?.oee || {};
         const a = oee.Availability || 0;
         const p = oee.Performance || 0;
@@ -793,8 +852,9 @@ function renderTimeline() {
         let constraint = 'availability';
         if (p < a && p < q) constraint = 'performance';
         else if (q < a && q < p) constraint = 'quality';
+        const pct = (topReason[1] / totalLost * 100).toFixed(0);
         document.getElementById('lossDriverText').innerHTML =
-            `<strong>${top[0]}</strong> consumed <strong>${top[1].toFixed(1)} min</strong> (${pct}% of all downtime). OEE is <strong>${constraint}-constrained</strong> this hour.`;
+            `<strong>${topReason[0]}</strong> consumed <strong>${topReason[1].toFixed(1)} min</strong> (${pct}% of all downtime). OEE is <strong>${constraint}-constrained</strong> this period.`;
     } else {
         document.getElementById('lossDriverText').textContent = 'Collecting data...';
     }
@@ -802,24 +862,22 @@ function renderTimeline() {
 
 // ── Downtime Pareto ──
 function renderPareto() {
-    const cutoff = Date.now() - WINDOW_MINUTES * 60000;
     const log = (stateLog[selectedMachine] || []);
     const now = Date.now();
     const windowStart = now - WINDOW_MINUTES * 60000;
 
-    // Sum minutes per non-productive category within window
-    const catMinutes = {};
+    // Sum minutes per stop-reason key within window (non-productive only)
+    // Key = "ST02 · Tool/Die Change" if stop code present, else category name
+    const reasonMinutes = {};  // key → { minutes, category }
     const allLog = log.length > 0 ? log : [];
 
-    // Find the effective log entries in window (including carry-over from before)
     const before = allLog.filter(e => e.t < windowStart);
     const inWindow = allLog.filter(e => e.t >= windowStart);
 
-    // Build effective entries
     const effective = [];
     if (before.length > 0) {
         const last = before[before.length - 1];
-        effective.push({ t: windowStart, state: last.state, category: last.category });
+        effective.push({ ...last, t: windowStart });
     }
     inWindow.forEach(e => effective.push(e));
 
@@ -827,29 +885,33 @@ function renderPareto() {
         const start = Math.max(effective[i].t, windowStart);
         const end = (i + 1 < effective.length) ? effective[i + 1].t : now;
         const cat = effective[i].category;
-        if (cat !== 'RUNNING') {
-            catMinutes[cat] = (catMinutes[cat] || 0) + (end - start) / 60000;
-        }
+        if (cat === 'RUNNING') continue;
+
+        const code = effective[i].stopCode;
+        const name = effective[i].stopName;
+        const label = code ? `${code} \u00b7 ${name}` : cat;
+        if (!reasonMinutes[label]) reasonMinutes[label] = { minutes: 0, category: cat };
+        reasonMinutes[label].minutes += (end - start) / 60000;
     }
 
-    const sorted = Object.entries(catMinutes)
-        .filter(([, m]) => m > 0.1)
-        .sort((a, b) => b[1] - a[1]);
+    const sorted = Object.entries(reasonMinutes)
+        .filter(([, v]) => v.minutes > 0.1)
+        .sort((a, b) => b[1].minutes - a[1].minutes);
 
-    const totalLost = sorted.reduce((s, [, m]) => s + m, 0);
+    const totalLost = sorted.reduce((s, [, v]) => s + v.minutes, 0);
 
     document.getElementById('paretoSubtitle').textContent =
         `Total lost: ${totalLost.toFixed(1)} min of ${WINDOW_MINUTES} min window`;
 
     // Bar data
-    paretoChart.data.labels = sorted.map(([cat]) => cat);
-    paretoChart.data.datasets[0].data = sorted.map(([, m]) => parseFloat(m.toFixed(1)));
-    paretoChart.data.datasets[0].backgroundColor = sorted.map(([cat]) => CATEGORY_COLORS[cat] || '#6b7280');
+    paretoChart.data.labels = sorted.map(([label]) => label);
+    paretoChart.data.datasets[0].data = sorted.map(([, v]) => parseFloat(v.minutes.toFixed(1)));
+    paretoChart.data.datasets[0].backgroundColor = sorted.map(([, v]) => CATEGORY_COLORS[v.category] || '#6b7280');
 
     // Cumulative % line
     let cum = 0;
-    paretoChart.data.datasets[1].data = sorted.map(([, m]) => {
-        cum += m;
+    paretoChart.data.datasets[1].data = sorted.map(([, v]) => {
+        cum += v.minutes;
         return totalLost > 0 ? parseFloat((cum / totalLost * 100).toFixed(1)) : 0;
     });
 
@@ -857,12 +919,12 @@ function renderPareto() {
 
     // Table
     const tbody = document.querySelector('#paretoTable tbody');
-    tbody.innerHTML = sorted.map(([cat, mins]) => {
-        const pct = totalLost > 0 ? (mins / totalLost * 100).toFixed(1) : '0.0';
-        const color = CATEGORY_COLORS[cat] || '#6b7280';
+    tbody.innerHTML = sorted.map(([label, v]) => {
+        const pct = totalLost > 0 ? (v.minutes / totalLost * 100).toFixed(1) : '0.0';
+        const color = CATEGORY_COLORS[v.category] || '#6b7280';
         return `<tr>
-            <td><span class="cat-dot" style="background:${color}"></span>${cat}</td>
-            <td class="dur">${mins.toFixed(1)} min</td>
+            <td><span class="cat-dot" style="background:${color}"></span>${label}</td>
+            <td class="dur">${v.minutes.toFixed(1)} min</td>
             <td class="pct">${pct}%</td>
         </tr>`;
     }).join('');
@@ -900,11 +962,16 @@ function updateMachineSelector() {
         sel.appendChild(opt);
     });
 
-    if (current && keys.includes(current)) {
+    if (urlMachine && keys.includes(urlMachine) && !selectedMachine) {
+        sel.value = urlMachine;
+        selectedMachine = urlMachine;
+        switchMachine(urlMachine);
+    } else if (current && keys.includes(current)) {
         sel.value = current;
     } else if (!selectedMachine && keys.length > 0) {
         sel.value = keys[0];
         selectedMachine = keys[0];
+        switchMachine(keys[0]);
     }
 
     // Load persisted state data for new machines

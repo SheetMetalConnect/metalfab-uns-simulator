@@ -81,13 +81,13 @@ class TestMessageFlowLevel1:
         sim._level = ComplexityLevel.LEVEL_1_SENSORS
         return sim, mqtt
 
-    def test_level_1_publishes_historian(self, simulator):
-        """Level 1 should publish _historian messages."""
+    def test_level_1_publishes_raw(self, simulator):
+        """Level 1 should publish _raw messages."""
         sim, mqtt = simulator
         sim._generate_initial_jobs()
         sim._tick()
 
-        historian_msgs = mqtt.get_messages_by_namespace("_historian")
+        historian_msgs = mqtt.get_messages_by_namespace("_raw")
         assert len(historian_msgs) > 0
 
     def test_level_1_does_not_publish_state(self, simulator):
@@ -118,16 +118,16 @@ class TestMessageFlowLevel1:
         erp_msgs = mqtt.get_messages_by_namespace("_erp")
         assert len(erp_msgs) == 0
 
-    def test_level_1_historian_topics_correct(self, simulator):
+    def test_level_1_raw_topics_correct(self, simulator):
         """Level 1 historian topics should follow correct structure."""
         sim, mqtt = simulator
         sim._tick()
 
-        historian_msgs = mqtt.get_messages_by_namespace("_historian")
+        historian_msgs = mqtt.get_messages_by_namespace("_raw")
         for msg in historian_msgs:
-            # Topic should be: base/area/cell/_historian/process/sensor
+            # Topic should be: base/area/cell/_raw/process/sensor
             parts = msg["topic"].split("/")
-            assert "_historian" in parts
+            assert "_raw" in parts
             assert "process" in parts  # Sensor group
 
 
@@ -143,12 +143,12 @@ class TestMessageFlowLevel2:
         sim._level = ComplexityLevel.LEVEL_2_STATEFUL
         return sim, mqtt
 
-    def test_level_2_publishes_historian(self, simulator):
-        """Level 2 should still publish _historian messages."""
+    def test_level_2_publishes_raw(self, simulator):
+        """Level 2 should still publish _raw messages."""
         sim, mqtt = simulator
         sim._tick()
 
-        historian_msgs = mqtt.get_messages_by_namespace("_historian")
+        historian_msgs = mqtt.get_messages_by_namespace("_raw")
         assert len(historian_msgs) > 0
 
     def test_level_2_publishes_state(self, simulator):
@@ -191,12 +191,12 @@ class TestMessageFlowLevel2:
         for msg in state_msgs:
             assert msg["retain"] is True, f"State message not retained: {msg['topic']}"
 
-    def test_level_2_historian_not_retained(self, simulator):
-        """Level 2 _historian messages should NOT be retained."""
+    def test_level_2_raw_not_retained(self, simulator):
+        """Level 2 _raw messages should NOT be retained."""
         sim, mqtt = simulator
         sim._tick()
 
-        historian_msgs = mqtt.get_messages_by_namespace("_historian")
+        historian_msgs = mqtt.get_messages_by_namespace("_raw")
         for msg in historian_msgs:
             assert msg["retain"] is False, f"Historian message retained: {msg['topic']}"
 
@@ -354,12 +354,12 @@ class TestTopicStructure:
         sim._tick()
 
         # Get historian messages (cell-level)
-        historian_msgs = mqtt.get_messages_by_namespace("_historian")
+        historian_msgs = mqtt.get_messages_by_namespace("_raw")
         for msg in historian_msgs:
             parts = msg["topic"].split("/")
             # Should have area before cell
-            historian_idx = parts.index("_historian")
-            assert historian_idx >= 4  # prefix/enterprise/site/area/cell/_historian
+            historian_idx = parts.index("_raw")
+            assert historian_idx >= 4  # prefix/enterprise/site/area/cell/_raw
 
     def test_site_level_topics(self, simulator):
         """Site-level topics should not include area/cell."""
@@ -386,7 +386,7 @@ class TestNamespaceConsistency:
     def test_namespace_prefixes_correct(self):
         """All namespace names should start with underscore."""
         namespaces = [
-            "_historian", "_state", "_meta", "_jobs",
+            "_raw", "_state", "_meta", "_jobs",
             "_erp", "_mes", "_analytics",
             "_dashboard", "_event", "_alarms", "_control"
         ]
@@ -416,7 +416,7 @@ class TestNamespaceConsistency:
         sim._tick()
 
         valid_namespaces = {
-            "_historian", "_state", "_meta", "_jobs",
+            "_raw", "_state", "_meta", "_jobs",
             "_erp", "_mes", "_analytics",
             "_dashboard", "_event", "_alarms", "_control"
         }

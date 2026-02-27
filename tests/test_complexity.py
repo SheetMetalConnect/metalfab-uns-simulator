@@ -90,14 +90,14 @@ class TestGetNamespacesForLevel:
     def test_level_1_namespaces(self):
         ns = get_namespaces_for_level(ComplexityLevel.LEVEL_1_SENSORS)
 
-        assert "_historian" in ns
+        assert "_raw" in ns
         assert "_state" not in ns
         assert "_erp" not in ns
 
     def test_level_2_namespaces(self):
         ns = get_namespaces_for_level(ComplexityLevel.LEVEL_2_STATEFUL)
 
-        assert "_historian" in ns
+        assert "_raw" in ns
         assert "_state" in ns
         assert "_meta" in ns
         assert "_jobs" in ns
@@ -106,7 +106,7 @@ class TestGetNamespacesForLevel:
     def test_level_3_namespaces(self):
         ns = get_namespaces_for_level(ComplexityLevel.LEVEL_3_ERP_MES)
 
-        assert "_historian" in ns
+        assert "_raw" in ns
         assert "_state" in ns
         assert "_erp" in ns
         assert "_mes" in ns
@@ -118,7 +118,7 @@ class TestGetNamespacesForLevel:
 
         # All namespaces present
         expected = {
-            "_historian", "_state", "_meta", "_jobs",
+            "_raw", "_state", "_meta", "_jobs",
             "_erp", "_mes", "_dashboard",
             "_analytics", "_event", "_alarms", "_dpp"
         }

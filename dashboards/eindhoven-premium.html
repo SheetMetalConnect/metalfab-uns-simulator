@@ -3,33 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MetalFab Eindhoven - Premium Factory Dashboard</title>
+    <title>MetalFab Eindhoven - Factory Overview</title>
     <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * {
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
         }
 
         body {
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
             min-height: 100vh;
+            color: #e2e8f0;
             position: relative;
             overflow-x: hidden;
         }
 
-        /* Animated background grid */
         body::before {
             content: '';
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             background-image:
                 linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
@@ -38,365 +34,481 @@
             pointer-events: none;
         }
 
-        /* Glassmorphism effect */
+        /* Breadcrumb */
+        .breadcrumb {
+            background: #0f172a;
+            border-bottom: 1px solid #1e293b;
+            padding: 8px 24px;
+            font-size: 13px;
+            color: #94a3b8;
+            position: relative;
+            z-index: 60;
+        }
+        .breadcrumb a {
+            color: #60a5fa;
+            text-decoration: none;
+        }
+        .breadcrumb a:hover {
+            color: #93c5fd;
+            text-decoration: underline;
+        }
+
+        /* Glass effects */
         .glass {
             background: rgba(15, 23, 42, 0.6);
             backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
-
         .glass-light {
             background: rgba(30, 41, 59, 0.5);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
-        /* Status indicator pulse */
-        @keyframes pulse-glow {
-            0%, 100% {
-                opacity: 1;
-                box-shadow: 0 0 20px currentColor;
-            }
-            50% {
-                opacity: 0.5;
-                box-shadow: 0 0 40px currentColor;
-            }
+        /* Header */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        .header-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .header-title {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #60a5fa, #67e8f9);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .header-subtitle {
+            color: #94a3b8;
+            font-size: 13px;
+            margin-top: 2px;
+        }
+        .connection-box {
+            padding: 10px 16px;
+            border-radius: 8px;
+        }
+        .conn-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .conn-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #6b7280;
+        }
+        .conn-dot.on { background: #10b981; }
+        .conn-text { font-size: 13px; font-weight: 500; }
+        .conn-detail { font-size: 11px; color: #94a3b8; }
+
+        /* Content */
+        .content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+            position: relative;
+            z-index: 10;
         }
 
-        .status-pulse {
-            animation: pulse-glow 2s ease-in-out infinite;
+        /* Stat cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .stat-card {
+            border-radius: 16px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .stat-label {
+            font-size: 13px;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+        }
+        .stat-value.blue {
+            background: linear-gradient(135deg, #60a5fa, #67e8f9);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .stat-value.green { color: #10b981; }
+        .stat-value.yellow { color: #fbbf24; }
+        .stat-value.teal {
+            background: linear-gradient(135deg, #34d399, #67e8f9);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .stat-sub { font-size: 11px; color: #64748b; margin-top: 4px; }
+        .sparkline-container { height: 40px; position: relative; }
+
+        /* Departments */
+        .dept-section {
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .dept-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .dept-title {
+            font-size: 20px;
+            font-weight: 700;
+            text-transform: capitalize;
+            background: linear-gradient(135deg, #60a5fa, #67e8f9);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .dept-count {
+            font-size: 13px;
+            color: #64748b;
+            font-weight: 400;
+        }
+        .dept-link {
+            margin-left: auto;
+            font-size: 12px;
+            color: #60a5fa;
+            text-decoration: none;
+            padding: 4px 12px;
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            border-radius: 6px;
+        }
+        .dept-link:hover {
+            background: rgba(96, 165, 250, 0.1);
+            border-color: rgba(96, 165, 250, 0.5);
+        }
+        .machines-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+            gap: 16px;
         }
 
-        /* Smooth transitions */
-        .smooth-transition {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* Hover effects */
+        /* Machine cards */
         .machine-card {
+            border-radius: 12px;
+            padding: 20px;
+            border: 2px solid transparent;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
         }
-
         .machine-card:hover {
             transform: translateY(-4px) scale(1.01);
             box-shadow: 0 20px 60px -15px rgba(0, 0, 0, 0.6);
         }
-
-        /* State-specific gradients */
         .state-execute {
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.1) 100%);
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1));
             border-color: rgba(16, 185, 129, 0.4);
         }
-
         .state-idle {
-            background: linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(245, 158, 11, 0.1) 100%);
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.1));
             border-color: rgba(251, 191, 36, 0.4);
         }
-
         .state-stopped {
-            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.1) 100%);
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.1));
             border-color: rgba(239, 68, 68, 0.4);
         }
-
         .state-held {
-            background: linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.1) 100%);
+            background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(234, 88, 12, 0.1));
             border-color: rgba(249, 115, 22, 0.4);
         }
 
-        /* Progress bar animation */
-        .progress-bar {
-            transition: width 0.5s ease-out;
-            background: linear-gradient(90deg, #10b981, #059669, #047857);
-            box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+        .card-machine-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .machine-icon {
+            width: 44px; height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #93c5fd;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            letter-spacing: -0.5px;
+        }
+        .card-machine-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .card-machine-oem {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+        .card-state-col {
+            text-align: right;
+        }
+        .card-state-name {
+            font-size: 15px;
+            font-weight: 700;
+        }
+        .card-state-time {
+            font-size: 11px;
+            color: #94a3b8;
+        }
+        .card-stop-reason {
+            font-size: 11px;
+            color: #f59e0b;
+            margin-top: 2px;
         }
 
-        /* Stats card glow */
-        .stat-card {
-            position: relative;
+        /* State text colors */
+        .text-green { color: #10b981; }
+        .text-yellow { color: #fbbf24; }
+        .text-red { color: #ef4444; }
+        .text-orange { color: #f97316; }
+        .text-purple { color: #a78bfa; }
+        .text-gray { color: #94a3b8; }
+
+        /* Job box */
+        .job-box {
+            border-radius: 8px;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+        .job-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .job-label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: #94a3b8;
+            text-transform: uppercase;
+        }
+        .priority-badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 10px;
+            border-radius: 10px;
+            color: #fff;
+        }
+        .priority-URGENT { background: rgba(239, 68, 68, 0.8); }
+        .priority-HIGH { background: rgba(249, 115, 22, 0.8); }
+        .priority-NORMAL { background: rgba(59, 130, 246, 0.8); }
+        .priority-LOW { background: rgba(107, 114, 128, 0.8); }
+        .job-id {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 15px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 2px;
+        }
+        .job-customer {
+            font-size: 13px;
+            color: #cbd5e1;
+        }
+        .job-product {
+            font-size: 11px;
+            color: #94a3b8;
+        }
+        .no-job {
+            text-align: center;
+            color: #64748b;
+            padding: 8px 0;
+        }
+
+        /* Progress bar */
+        .progress-wrapper { margin-top: 10px; }
+        .progress-top {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+        .progress-track {
+            width: 100%;
+            height: 6px;
+            background: rgba(51, 65, 85, 0.5);
+            border-radius: 3px;
             overflow: hidden;
         }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
-            opacity: 0;
-            transition: opacity 0.3s;
+        .progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            background: linear-gradient(90deg, #10b981, #059669, #047857);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+            transition: width 0.5s ease-out;
         }
 
-        .stat-card:hover::before {
-            opacity: 1;
+        /* OEE row */
+        .oee-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+        .oee-cell {
+            text-align: center;
+            border-radius: 8px;
+            padding: 8px 4px;
+        }
+        .oee-cell-label {
+            font-size: 10px;
+            color: #94a3b8;
+            margin-bottom: 2px;
+        }
+        .oee-cell-value {
+            font-size: 18px;
+            font-weight: 700;
         }
 
-        /* Loading skeleton */
+        /* Skeleton */
         @keyframes skeleton-loading {
             0% { background-position: -200px 0; }
             100% { background-position: calc(200px + 100%) 0; }
         }
-
         .skeleton {
             background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 37%, rgba(255,255,255,0.05) 63%);
             background-size: 400px 100%;
             animation: skeleton-loading 1.4s ease infinite;
+            border-radius: 8px;
         }
 
-        /* Sparkline container */
-        .sparkline-container {
-            height: 40px;
-            position: relative;
+        /* Pulse animation */
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
+        .status-pulse { animation: pulse-glow 2s ease-in-out infinite; }
 
-        /* Machine icons */
-        .machine-icon {
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 12px;
-            font-size: 24px;
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.2);
-        }
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
+        ::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.5); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(59, 130, 246, 0.7); }
 
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: rgba(15, 23, 42, 0.5);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: rgba(59, 130, 246, 0.5);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(59, 130, 246, 0.7);
-        }
-
-        /* Tooltip */
-        .tooltip {
-            position: relative;
-        }
-
-        .tooltip::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%) translateY(-8px);
-            background: rgba(0, 0, 0, 0.9);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            white-space: nowrap;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s, transform 0.2s;
-            z-index: 1000;
-        }
-
-        .tooltip:hover::after {
-            opacity: 1;
-            transform: translateX(-50%) translateY(-4px);
-        }
-
-        /* Fullscreen mode */
-        .fullscreen-btn {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            z-index: 100;
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
-            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .fullscreen-btn:hover {
-            transform: scale(1.1);
-            box-shadow: 0 12px 32px rgba(59, 130, 246, 0.6);
-        }
-
-        /* Notification badge */
-        .notification-badge {
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            background: #ef4444;
-            color: white;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 11px;
-            font-weight: 700;
-            animation: pulse-glow 2s ease-in-out infinite;
+        @media (max-width: 900px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .machines-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
-<body class="text-gray-100">
+<body>
+    <!-- Breadcrumb -->
+    <div class="breadcrumb">
+        <a href="index.html">&larr; Dashboards</a> &nbsp;|&nbsp; Factory Overview
+    </div>
+
     <!-- Header -->
-    <div class="glass sticky top-0 z-50">
-        <div class="container mx-auto px-6 py-6">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-4">
-                    <div class="machine-icon">
-                        🏭
-                    </div>
-                    <div>
-                        <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-                            MetalFab Eindhoven
-                        </h1>
-                        <p class="text-gray-400 text-sm mt-1">Premium Factory Dashboard • Real-Time Intelligence</p>
-                    </div>
+    <div class="header glass">
+        <div class="header-inner">
+            <div class="header-left">
+                <div>
+                    <div class="header-title">MetalFab Eindhoven</div>
+                    <div class="header-subtitle">Factory Overview</div>
                 </div>
-                <div class="flex items-center gap-6">
-                    <!-- Connection Status -->
-                    <div class="glass-light px-4 py-3 rounded-lg">
-                        <div class="flex items-center gap-3">
-                            <div class="relative">
-                                <div id="connectionDot" class="w-3 h-3 rounded-full bg-gray-500"></div>
-                            </div>
-                            <div>
-                                <div id="connectionText" class="text-sm font-medium">Connecting...</div>
-                                <div class="text-xs text-gray-400">
-                                    <span id="messageCount">0</span> msgs •
-                                    <span id="lastUpdate">--:--:--</span>
-                                </div>
-                            </div>
+            </div>
+            <div class="connection-box glass-light">
+                <div class="conn-row">
+                    <div class="conn-dot" id="connectionDot"></div>
+                    <div>
+                        <div class="conn-text" id="connectionText">Connecting...</div>
+                        <div class="conn-detail">
+                            <span id="messageCount">0</span> msgs &middot;
+                            <span id="lastUpdate">--:--:--</span>
                         </div>
                     </div>
-                    <!-- Settings -->
-                    <button onclick="toggleSettings()" class="glass-light p-3 rounded-lg hover:bg-blue-500/20 smooth-transition tooltip" data-tooltip="Settings">
-                        ⚙️
-                    </button>
-                    <!-- Fullscreen -->
-                    <button onclick="toggleFullscreen()" class="glass-light p-3 rounded-lg hover:bg-blue-500/20 smooth-transition tooltip" data-tooltip="Fullscreen">
-                        ⛶
-                    </button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Main Content -->
-    <div class="container mx-auto px-6 py-8 relative z-10">
-        <!-- Site Statistics -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div class="glass stat-card rounded-2xl p-6 smooth-transition">
-                <div class="flex items-start justify-between mb-4">
-                    <div class="text-gray-400 text-sm font-medium">Total Assets</div>
-                    <div class="text-2xl">🏭</div>
+    <div class="content">
+        <!-- Stat cards -->
+        <div class="stats-grid">
+            <div class="glass stat-card">
+                <div class="stat-card-top">
+                    <div class="stat-label">Total Assets</div>
                 </div>
-                <div class="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent" id="totalAssets">0</div>
-                <div class="text-xs text-gray-500 mt-2">Active machines</div>
+                <div class="stat-value blue" id="totalAssets">0</div>
+                <div class="stat-sub">Active machines</div>
             </div>
-
-            <div class="glass stat-card rounded-2xl p-6 smooth-transition">
-                <div class="flex items-start justify-between mb-4">
-                    <div class="text-gray-400 text-sm font-medium">Running</div>
-                    <div class="text-2xl">⚡</div>
+            <div class="glass stat-card">
+                <div class="stat-card-top">
+                    <div class="stat-label">Running</div>
                 </div>
-                <div class="text-4xl font-bold text-green-400" id="runningCount">0</div>
-                <div class="sparkline-container mt-2">
+                <div class="stat-value green" id="runningCount">0</div>
+                <div class="sparkline-container">
                     <canvas id="runningSparkline"></canvas>
                 </div>
             </div>
-
-            <div class="glass stat-card rounded-2xl p-6 smooth-transition">
-                <div class="flex items-start justify-between mb-4">
-                    <div class="text-gray-400 text-sm font-medium">Idle</div>
-                    <div class="text-2xl">⏸️</div>
+            <div class="glass stat-card">
+                <div class="stat-card-top">
+                    <div class="stat-label">Idle</div>
                 </div>
-                <div class="text-4xl font-bold text-yellow-400" id="idleCount">0</div>
-                <div class="text-xs text-gray-500 mt-2">Waiting for work</div>
+                <div class="stat-value yellow" id="idleCount">0</div>
+                <div class="stat-sub">Waiting for work</div>
             </div>
-
-            <div class="glass stat-card rounded-2xl p-6 smooth-transition">
-                <div class="flex items-start justify-between mb-4">
-                    <div class="text-gray-400 text-sm font-medium">Avg OEE</div>
-                    <div class="text-2xl">📊</div>
+            <div class="glass stat-card">
+                <div class="stat-card-top">
+                    <div class="stat-label">Avg OEE</div>
                 </div>
-                <div class="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent" id="avgOEE">0%</div>
-                <div class="sparkline-container mt-2">
+                <div class="stat-value teal" id="avgOEE">0%</div>
+                <div class="sparkline-container">
                     <canvas id="oeeSparkline"></canvas>
                 </div>
             </div>
         </div>
 
         <!-- Departments -->
-        <div id="departments" class="space-y-8">
+        <div id="departments">
             <!-- Loading skeleton -->
-            <div class="glass rounded-2xl p-8">
-                <div class="skeleton h-8 w-48 rounded mb-6"></div>
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="skeleton h-64 rounded-xl"></div>
-                    <div class="skeleton h-64 rounded-xl"></div>
+            <div class="glass dept-section">
+                <div class="skeleton" style="height: 28px; width: 200px; margin-bottom: 20px;"></div>
+                <div class="machines-grid">
+                    <div class="skeleton" style="height: 260px;"></div>
+                    <div class="skeleton" style="height: 260px;"></div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Debug Console (collapsible) -->
-        <div class="mt-8">
-            <button onclick="toggleDebug()" class="glass-light px-6 py-3 rounded-lg text-sm hover:bg-blue-500/20 smooth-transition">
-                🔍 Debug Console
-            </button>
-            <div id="debugConsole" class="hidden mt-4 glass rounded-xl p-6 max-h-96 overflow-y-auto">
-                <div id="debugLog" class="text-xs font-mono space-y-1"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Settings Panel -->
-    <div id="settingsPanel" class="hidden fixed top-0 right-0 w-96 h-full glass z-50 p-6 overflow-y-auto">
-        <div class="flex items-center justify-between mb-6">
-            <h3 class="text-xl font-bold">Settings</h3>
-            <button onclick="toggleSettings()" class="text-gray-400 hover:text-white">✕</button>
-        </div>
-
-        <div class="space-y-4">
-            <div>
-                <label class="block text-sm text-gray-400 mb-2">Sound Notifications</label>
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" id="soundToggle" class="sr-only peer" onchange="toggleSound()">
-                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
-            </div>
-
-            <div>
-                <label class="block text-sm text-gray-400 mb-2">Auto-refresh Rate</label>
-                <select id="refreshRate" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm">
-                    <option value="1000">1 second</option>
-                    <option value="5000">5 seconds</option>
-                    <option value="10000">10 seconds</option>
-                </select>
-            </div>
-
-            <div>
-                <label class="block text-sm text-gray-400 mb-2">Theme</label>
-                <select id="theme" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm">
-                    <option value="dark">Dark</option>
-                    <option value="light">Light (Coming Soon)</option>
-                </select>
             </div>
         </div>
     </div>
@@ -411,44 +523,47 @@
         let machines = {};
         let messageCount = 0;
         let client = null;
-        let soundEnabled = false;
         let runningHistory = [];
         let oeeHistory = [];
         let runningChart = null;
         let oeeChart = null;
 
-        // Machine type icons
-        const MACHINE_ICONS = {
-            'laser': '🔷',
-            'press': '⚙️',
-            'weld': '⚡',
-            'coating': '🎨',
-            'agv': '🤖',
-            'saw': '🪚',
-            'default': '🏭'
+        // Machine icon abbreviations (no emojis)
+        const MACHINE_ABBR = {
+            'laser': 'LAS',
+            'press': 'PRS',
+            'weld': 'WLD',
+            'coating': 'COT',
+            'agv': 'AGV',
+            'saw': 'SAW',
         };
 
-        // PackML State Colors
+        // Department links
+        const DEPT_LINKS = {
+            'finishing': { href: 'coating_line_dashboard.html', label: 'Coating Line' },
+            'warehouse': { href: 'warehouse_dashboard.html', label: 'Warehouse' },
+        };
+
+        // PackML State → CSS class
         const STATE_CLASSES = {
             'STOPPED': 'state-stopped',
             'IDLE': 'state-idle',
-            'STARTING': 'glass-light border-blue-500',
+            'STARTING': 'glass-light',
             'EXECUTE': 'state-execute',
-            'COMPLETING': 'glass-light border-blue-500',
+            'COMPLETING': 'glass-light',
             'HELD': 'state-held',
-            'SUSPENDED': 'glass-light border-purple-500',
+            'SUSPENDED': 'glass-light',
             'ABORTED': 'state-stopped',
         };
 
         // Initialize
         window.addEventListener('load', () => {
-            debug('🚀 Premium Dashboard initializing...');
             initCharts();
             connectMQTT();
             startPeriodicUpdates();
         });
 
-        // Initialize sparkline charts
+        // Sparkline charts
         function initCharts() {
             const chartConfig = {
                 type: 'line',
@@ -503,7 +618,6 @@
             });
         }
 
-        // Update sparklines
         function updateSparklines() {
             const running = Object.values(machines).filter(m => m.state === 'EXECUTE').length;
             runningHistory.push(running);
@@ -520,73 +634,53 @@
 
             runningChart.data.datasets[0].data = runningHistory;
             runningChart.update('none');
-
             oeeChart.data.datasets[0].data = oeeHistory;
             oeeChart.update('none');
         }
 
         // MQTT Connection
         function connectMQTT() {
-            debug('Connecting to: ' + MQTT_BROKER);
-
             client = mqtt.connect(MQTT_BROKER, {
                 reconnectPeriod: 1000,
                 connectTimeout: 30000
             });
 
             client.on('connect', () => {
-                debug('✓ Connected to MQTT broker');
                 updateConnectionStatus(true);
 
                 const topics = [
                     `${TOPIC_BASE}/+/+/Dashboard/#`,
                     `${TOPIC_BASE}/+/+/Line/State`,
                     `${TOPIC_BASE}/+/+/Edge/StateName`,
+                    `${TOPIC_BASE}/+/+/Edge/StopReason`,
                 ];
 
                 topics.forEach(topic => {
-                    client.subscribe(topic, (err) => {
-                        if (!err) debug('✓ Subscribed: ' + topic);
-                    });
+                    client.subscribe(topic);
                 });
             });
 
             client.on('message', handleMessage);
-            client.on('error', (err) => {
-                debug('✗ Error: ' + err.message);
-                updateConnectionStatus(false);
-            });
+            client.on('error', () => updateConnectionStatus(false));
             client.on('offline', () => updateConnectionStatus(false));
         }
 
         // Handle MQTT messages
         function handleMessage(topic, message) {
-            // Filter: Only process Eindhoven topics
-            if (!topic.startsWith(TOPIC_BASE)) {
-                debug('⚠ Ignored non-Eindhoven topic: ' + topic);
-                return;
-            }
+            if (!topic.startsWith(TOPIC_BASE)) return;
 
             messageCount++;
             document.getElementById('messageCount').textContent = messageCount;
             document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
 
             const parts = topic.split('/');
-            if (parts.length < 7) {
-                debug('⚠ Invalid topic format: ' + topic);
-                return;
-            }
+            if (parts.length < 7) return;
 
             const dept = parts[4];
             const machine = parts[5];
             const namespace = parts[6];
             const dataType = parts[7];
             const machineKey = `${dept}/${machine}`;
-
-            // Debug: Log message processing
-            if (messageCount % 50 === 0) {
-                debug(`📊 Processed ${messageCount} messages | Machines: ${Object.keys(machines).length}`);
-            }
 
             if (!machines[machineKey]) {
                 machines[machineKey] = {
@@ -598,6 +692,7 @@
                     asset: {},
                     job: {},
                     oee: {},
+                    stopReason: null,
                     lastUpdate: Date.now()
                 };
             }
@@ -616,32 +711,34 @@
             } else if (namespace === 'Line' && dataType === 'State') {
                 const newState = getStateName(data);
                 if (machines[machineKey].state !== newState) {
-                    playStateChangeSound(machines[machineKey].state, newState);
                     machines[machineKey].state = newState;
                     machines[machineKey].stateSince = Date.now();
                 }
             } else if (namespace === 'Edge' && dataType === 'StateName') {
                 const newState = data.toString();
                 if (machines[machineKey].state !== newState) {
-                    playStateChangeSound(machines[machineKey].state, newState);
                     machines[machineKey].state = newState;
                     machines[machineKey].stateSince = Date.now();
+                }
+            } else if (namespace === 'Edge' && dataType === 'StopReason') {
+                if (data && data.code) {
+                    machines[machineKey].stopReason = data;
+                } else {
+                    machines[machineKey].stopReason = null;
                 }
             }
 
             machines[machineKey].lastUpdate = Date.now();
 
-            // Only trigger UI update if meaningful data changed
             const shouldUpdate = namespace === 'Dashboard' ||
                                 (namespace === 'Line' && dataType === 'State') ||
-                                (namespace === 'Edge' && dataType === 'StateName');
+                                (namespace === 'Edge');
 
             if (shouldUpdate) {
                 requestAnimationFrame(updateUI);
             }
         }
 
-        // Convert state number to name
         function getStateName(stateNum) {
             const states = {
                 0: 'STOPPED', 1: 'STARTING', 2: 'IDLE', 3: 'EXECUTE',
@@ -650,42 +747,15 @@
             return states[stateNum] || 'UNKNOWN';
         }
 
-        // Get machine icon
-        function getMachineIcon(machineId) {
+        function getMachineAbbr(machineId) {
             const id = machineId.toLowerCase();
-            if (id.includes('laser')) return MACHINE_ICONS.laser;
-            if (id.includes('press')) return MACHINE_ICONS.press;
-            if (id.includes('weld')) return MACHINE_ICONS.weld;
-            if (id.includes('coating')) return MACHINE_ICONS.coating;
-            if (id.includes('agv')) return MACHINE_ICONS.agv;
-            if (id.includes('saw')) return MACHINE_ICONS.saw;
-            return MACHINE_ICONS.default;
-        }
-
-        // Play sound on state change
-        function playStateChangeSound(oldState, newState) {
-            if (!soundEnabled) return;
-
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-
-            if (newState === 'EXECUTE') {
-                oscillator.frequency.value = 800;
-                gainNode.gain.value = 0.1;
-            } else if (newState === 'STOPPED' || newState === 'ABORTED') {
-                oscillator.frequency.value = 400;
-                gainNode.gain.value = 0.15;
+            for (const [key, abbr] of Object.entries(MACHINE_ABBR)) {
+                if (id.includes(key)) return abbr;
             }
-
-            oscillator.start();
-            setTimeout(() => oscillator.stop(), 100);
+            return 'MCH';
         }
 
-        // Extract render-relevant state (ignore timestamps)
+        // Render state (for change detection)
         function getRenderState(machine) {
             return {
                 state: machine.state,
@@ -697,11 +767,12 @@
                 quality: machine.oee?.Quality,
                 performance: machine.oee?.Performance,
                 assetOEM: machine.asset?.OEM,
-                assetModel: machine.asset?.Model
+                assetModel: machine.asset?.Model,
+                stopCode: machine.stopReason?.code,
             };
         }
 
-        // Update UI (debounced with smart state comparison)
+        // Debounced UI update
         let updateScheduled = false;
         let lastMachineStates = {};
 
@@ -711,35 +782,29 @@
 
             setTimeout(() => {
                 let hasChanges = false;
-
-                // Check which machines actually changed
                 Object.keys(machines).forEach(key => {
                     const currentState = getRenderState(machines[key]);
                     const lastState = lastMachineStates[key];
-
                     if (!lastState || JSON.stringify(currentState) !== JSON.stringify(lastState)) {
                         hasChanges = true;
                         lastMachineStates[key] = currentState;
                     }
                 });
 
-                // Only re-render if something actually changed
                 if (hasChanges) {
                     renderDashboard();
                     updateStatistics();
                     updateSparklines();
                 }
-
                 updateScheduled = false;
             }, 100);
         }
 
-        // Render dashboard (incremental updates)
+        // Render dashboard
         let lastDepartmentStructure = null;
 
         function renderDashboard() {
             const departments = {};
-
             Object.values(machines).forEach(machine => {
                 if (!departments[machine.department]) {
                     departments[machine.department] = [];
@@ -750,167 +815,138 @@
             const container = document.getElementById('departments');
             const currentStructure = Object.keys(departments).sort().join(',');
 
-            // Only rebuild DOM if department structure changed (machines added/removed)
             if (currentStructure !== lastDepartmentStructure) {
                 container.innerHTML = '';
-
                 Object.keys(departments).sort().forEach(dept => {
                     const deptDiv = document.createElement('div');
-                    deptDiv.className = 'glass rounded-2xl p-8 smooth-transition';
+                    deptDiv.className = 'glass dept-section';
                     deptDiv.dataset.department = dept;
-
                     const deptMachines = departments[dept];
-                    const deptHtml = `
-                        <h2 class="text-2xl font-bold mb-6 capitalize flex items-center gap-3">
-                            <span class="text-3xl">${getDepartmentIcon(dept)}</span>
-                            <span class="bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-                                ${dept} Department
-                            </span>
-                            <span class="text-sm text-gray-500 font-normal">${deptMachines.length} machines</span>
-                        </h2>
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6" data-machines-container="${dept}">
-                            ${deptMachines.map(machine => renderMachineCard(machine)).join('')}
+                    const link = DEPT_LINKS[dept];
+                    const linkHtml = link
+                        ? `<a class="dept-link" href="${link.href}">${link.label} &rarr;</a>`
+                        : '';
+
+                    deptDiv.innerHTML = `
+                        <div class="dept-header">
+                            <span class="dept-title">${dept} Department</span>
+                            <span class="dept-count">${deptMachines.length} machines</span>
+                            ${linkHtml}
+                        </div>
+                        <div class="machines-grid" data-machines-container="${dept}">
+                            ${deptMachines.map(m => renderMachineCard(m)).join('')}
                         </div>
                     `;
-
-                    deptDiv.innerHTML = deptHtml;
                     container.appendChild(deptDiv);
                 });
-
                 lastDepartmentStructure = currentStructure;
             } else {
-                // Incrementally update only changed machine cards
                 Object.keys(departments).sort().forEach(dept => {
-                    const machinesContainer = container.querySelector(`[data-machines-container="${dept}"]`);
-                    if (machinesContainer) {
-                        const deptMachines = departments[dept];
-                        machinesContainer.innerHTML = deptMachines.map(machine => renderMachineCard(machine)).join('');
+                    const mc = container.querySelector(`[data-machines-container="${dept}"]`);
+                    if (mc) {
+                        mc.innerHTML = departments[dept].map(m => renderMachineCard(m)).join('');
                     }
                 });
             }
         }
 
-        // Get department icon
-        function getDepartmentIcon(dept) {
-            const icons = {
-                'cutting': '✂️',
-                'forming': '🔨',
-                'welding': '⚡',
-                'finishing': '✨',
-                'assembly': '🔧',
-                'warehouse': '📦'
-            };
-            return icons[dept] || '🏭';
-        }
-
-        // Render machine card
+        // Machine card
         function renderMachineCard(machine) {
             const stateClass = STATE_CLASSES[machine.state] || 'glass-light';
-            const isRunning = machine.state === 'EXECUTE';
-            const pulse = ''; // Removed pulsing animation
             const timeSince = formatTimeSince(machine.stateSince);
             const hasJob = machine.job && machine.job.JobID;
             const oeePercent = machine.oee && machine.oee.OEE ? Math.round(machine.oee.OEE * 100) : 0;
-            const icon = getMachineIcon(machine.id);
+            const abbr = getMachineAbbr(machine.id);
+            const machineKey = `${machine.department}/${machine.id}`;
+            const oeeUrl = `oee-dashboard.html?machine=${encodeURIComponent(machineKey)}`;
+
+            // Stop reason display (only when not EXECUTE)
+            let stopHtml = '';
+            if (machine.state !== 'EXECUTE' && machine.stopReason && machine.stopReason.code) {
+                stopHtml = `<div class="card-stop-reason">${machine.stopReason.code} &middot; ${machine.stopReason.name}</div>`;
+            }
+
+            const priority = machine.job?.Priority || 'NORMAL';
 
             return `
-                <div class="machine-card glass-light rounded-xl p-6 border-2 ${stateClass} ${pulse}">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="flex items-center gap-4">
-                            <div class="machine-icon text-3xl">
-                                ${icon}
-                            </div>
+                <a href="${oeeUrl}" class="machine-card glass-light ${stateClass}">
+                    <div class="card-top">
+                        <div class="card-machine-info">
+                            <div class="machine-icon">${abbr}</div>
                             <div>
-                                <h3 class="text-xl font-bold">${machine.name}</h3>
-                                <div class="text-xs text-gray-400 mt-1">
+                                <div class="card-machine-name">${machine.name}</div>
+                                <div class="card-machine-oem">
                                     ${machine.asset.OEM || 'Unknown'} ${machine.asset.Model || ''}
                                 </div>
                             </div>
                         </div>
-                        <div class="text-right">
-                            <div class="text-lg font-bold ${getStateColor(machine.state)}">${machine.state}</div>
-                            <div class="text-xs text-gray-400" data-state-timestamp="${machine.stateSince}">${timeSince}</div>
+                        <div class="card-state-col">
+                            <div class="card-state-name ${getStateColor(machine.state)}">${machine.state}</div>
+                            <div class="card-state-time" data-state-timestamp="${machine.stateSince}">${timeSince}</div>
+                            ${stopHtml}
                         </div>
                     </div>
 
                     ${hasJob ? `
-                        <div class="glass rounded-lg p-4 mb-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-xs text-gray-400 font-medium">CURRENT JOB</span>
-                                <span class="text-xs px-3 py-1 rounded-full font-medium ${getPriorityClass(machine.job.Priority)}">
-                                    ${machine.job.Priority || 'NORMAL'}
-                                </span>
+                        <div class="job-box glass">
+                            <div class="job-header">
+                                <span class="job-label">Current Job</span>
+                                <span class="priority-badge priority-${priority}">${priority}</span>
                             </div>
-                            <div class="font-mono text-lg font-bold mb-1">${machine.job.JobID}</div>
-                            <div class="text-sm text-gray-300 mb-1">${machine.job.Customer || 'Unknown'}</div>
-                            <div class="text-xs text-gray-400">${machine.job.ProductName || ''}</div>
+                            <div class="job-id">${machine.job.JobID}</div>
+                            <div class="job-customer">${machine.job.Customer || 'Unknown'}</div>
+                            <div class="job-product">${machine.job.ProductName || ''}</div>
                             ${machine.job.Progress !== undefined ? `
-                                <div class="mt-3">
-                                    <div class="flex justify-between text-xs mb-2">
-                                        <span class="text-gray-400">Progress</span>
-                                        <span class="font-bold">${machine.job.Progress}%</span>
+                                <div class="progress-wrapper">
+                                    <div class="progress-top">
+                                        <span style="color: #94a3b8;">Progress</span>
+                                        <span style="font-weight: 700;">${machine.job.Progress}%</span>
                                     </div>
-                                    <div class="w-full bg-gray-700/50 rounded-full h-2 overflow-hidden">
-                                        <div class="progress-bar h-2 rounded-full" style="width: ${machine.job.Progress}%"></div>
+                                    <div class="progress-track">
+                                        <div class="progress-fill" style="width: ${machine.job.Progress}%"></div>
                                     </div>
                                 </div>
                             ` : ''}
                         </div>
                     ` : `
-                        <div class="glass rounded-lg p-4 mb-4 text-center text-gray-500">
-                            No active job
-                        </div>
+                        <div class="job-box glass no-job">No active job</div>
                     `}
 
-                    <div class="grid grid-cols-4 gap-3">
-                        <div class="text-center glass rounded-lg p-3">
-                            <div class="text-xs text-gray-400 mb-1">OEE</div>
-                            <div class="text-xl font-bold ${getOEEColor(oeePercent)}">${oeePercent}%</div>
+                    <div class="oee-grid">
+                        <div class="oee-cell glass">
+                            <div class="oee-cell-label">OEE</div>
+                            <div class="oee-cell-value" style="color: ${getOEEHex(oeePercent)}">${oeePercent}%</div>
                         </div>
-                        <div class="text-center glass rounded-lg p-3">
-                            <div class="text-xs text-gray-400 mb-1">Avail</div>
-                            <div class="text-xl font-bold">${machine.oee.Availability ? Math.round(machine.oee.Availability * 100) : 0}%</div>
+                        <div class="oee-cell glass">
+                            <div class="oee-cell-label">Avail</div>
+                            <div class="oee-cell-value">${machine.oee.Availability ? Math.round(machine.oee.Availability * 100) : 0}%</div>
                         </div>
-                        <div class="text-center glass rounded-lg p-3">
-                            <div class="text-xs text-gray-400 mb-1">Qual</div>
-                            <div class="text-xl font-bold">${machine.oee.Quality ? Math.round(machine.oee.Quality * 100) : 0}%</div>
+                        <div class="oee-cell glass">
+                            <div class="oee-cell-label">Qual</div>
+                            <div class="oee-cell-value">${machine.oee.Quality ? Math.round(machine.oee.Quality * 100) : 0}%</div>
                         </div>
-                        <div class="text-center glass rounded-lg p-3">
-                            <div class="text-xs text-gray-400 mb-1">Perf</div>
-                            <div class="text-xl font-bold">${machine.oee.Performance ? Math.round(machine.oee.Performance * 100) : 0}%</div>
+                        <div class="oee-cell glass">
+                            <div class="oee-cell-label">Perf</div>
+                            <div class="oee-cell-value">${machine.oee.Performance ? Math.round(machine.oee.Performance * 100) : 0}%</div>
                         </div>
                     </div>
-                </div>
+                </a>
             `;
         }
 
-        // Helper functions
+        // Helpers
         function getStateColor(state) {
             const colors = {
-                'EXECUTE': 'text-green-400',
-                'IDLE': 'text-yellow-400',
-                'STOPPED': 'text-red-400',
-                'HELD': 'text-orange-400',
-                'SUSPENDED': 'text-purple-400',
-                'ABORTED': 'text-red-400'
+                'EXECUTE': 'text-green', 'IDLE': 'text-yellow', 'STOPPED': 'text-red',
+                'HELD': 'text-orange', 'SUSPENDED': 'text-purple', 'ABORTED': 'text-red'
             };
-            return colors[state] || 'text-gray-400';
+            return colors[state] || 'text-gray';
         }
 
-        function getPriorityClass(priority) {
-            const classes = {
-                'URGENT': 'bg-red-500/80 text-white',
-                'HIGH': 'bg-orange-500/80 text-white',
-                'NORMAL': 'bg-blue-500/80 text-white',
-                'LOW': 'bg-gray-500/80 text-white'
-            };
-            return classes[priority] || classes.NORMAL;
-        }
-
-        function getOEEColor(oee) {
-            if (oee >= 85) return 'text-green-400';
-            if (oee >= 70) return 'text-yellow-400';
-            return 'text-red-400';
+        function getOEEHex(oee) {
+            if (oee >= 85) return '#10b981';
+            if (oee >= 70) return '#fbbf24';
+            return '#ef4444';
         }
 
         function formatTimeSince(timestamp) {
@@ -922,7 +958,6 @@
             return `${hours}h ${mins}m`;
         }
 
-        // Update statistics
         function updateStatistics() {
             const total = Object.keys(machines).length;
             const running = Object.values(machines).filter(m => m.state === 'EXECUTE').length;
@@ -941,70 +976,29 @@
             document.getElementById('avgOEE').textContent = avgOEE + '%';
         }
 
-        // Connection status
         function updateConnectionStatus(connected) {
             const dot = document.getElementById('connectionDot');
             const text = document.getElementById('connectionText');
-
             if (connected) {
-                dot.className = 'w-3 h-3 rounded-full bg-green-500 status-pulse';
+                dot.className = 'conn-dot on status-pulse';
                 text.textContent = 'Connected';
-                text.className = 'text-sm font-medium text-green-400';
+                text.style.color = '#10b981';
             } else {
-                dot.className = 'w-3 h-3 rounded-full bg-red-500 status-pulse';
+                dot.className = 'conn-dot status-pulse';
+                dot.style.background = '#ef4444';
                 text.textContent = 'Disconnected';
-                text.className = 'text-sm font-medium text-red-400';
+                text.style.color = '#ef4444';
             }
         }
 
-        // Update time displays only (without re-rendering everything)
         function startPeriodicUpdates() {
             setInterval(() => {
-                // Update "time since" displays without rebuilding DOM
                 const stateTimestamps = document.querySelectorAll('[data-state-timestamp]');
                 stateTimestamps.forEach(el => {
                     const timestamp = parseInt(el.dataset.stateTimestamp);
                     el.textContent = formatTimeSince(timestamp);
                 });
             }, 1000);
-        }
-
-        // Debug logging
-        function debug(message) {
-            console.log(message);
-            const log = document.getElementById('debugLog');
-            if (log) {
-                const timestamp = new Date().toLocaleTimeString();
-                const line = document.createElement('div');
-                line.className = 'text-gray-400';
-                line.textContent = `[${timestamp}] ${message}`;
-                log.insertBefore(line, log.firstChild);
-
-                if (log.children.length > 100) {
-                    log.removeChild(log.lastChild);
-                }
-            }
-        }
-
-        // UI toggles
-        function toggleDebug() {
-            document.getElementById('debugConsole').classList.toggle('hidden');
-        }
-
-        function toggleSettings() {
-            document.getElementById('settingsPanel').classList.toggle('hidden');
-        }
-
-        function toggleSound() {
-            soundEnabled = document.getElementById('soundToggle').checked;
-        }
-
-        function toggleFullscreen() {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen();
-            } else {
-                document.exitFullscreen();
-            }
         }
     </script>
 </body>

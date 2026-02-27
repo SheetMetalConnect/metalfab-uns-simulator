@@ -25,8 +25,8 @@ else
 fi
 
 echo
-echo "Opening Eindhoven Factory Overview dashboard..."
-open "$(dirname "$0")/eindhoven-overview.html"
+echo "Opening Factory Overview dashboard..."
+open "$(dirname "$0")/eindhoven-premium.html"
 
 echo "[OK] Dashboard opened in browser"
 echo

@@ -46,7 +46,7 @@ The MCP server publishes its own activity to the UNS, making it a **visible, obs
 - `metalfab-sim/mcp_server/{client_id}/_event/tool_call` (STREAMING)
   Every tool invocation with arguments and results
 
-- `metalfab-sim/mcp_server/{client_id}/_historian/activity` (STREAMING)
+- `metalfab-sim/mcp_server/{client_id}/_raw/activity` (STREAMING)
   Activity metrics: tool call counts, uptime, cache size
 
 **Example Identity:**
@@ -444,7 +444,7 @@ mosquitto_sub -t 'metalfab-sim/mcp_server/+/_meta/identity' -v
 mosquitto_sub -t 'metalfab-sim/mcp_server/+/_event/tool_call' -v
 
 # Monitor activity metrics
-mosquitto_sub -t 'metalfab-sim/mcp_server/+/_historian/activity' -v
+mosquitto_sub -t 'metalfab-sim/mcp_server/+/_raw/activity' -v
 
 # Check current state
 mosquitto_sub -t 'metalfab-sim/mcp_server/+/_state' -v

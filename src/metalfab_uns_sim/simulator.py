@@ -3,7 +3,7 @@
 Simulates a realistic metalworking/sheet metal fabrication facility with:
 
 - **Descriptive Namespace** (_meta): Asset metadata, OEM info, service dates
-- **Functional Namespace** (_state, _historian, _erp, _mes): Real-time operations
+- **Functional Namespace** (_state, _raw, _erp, _mes): Real-time operations
 - **Informative Namespace** (_dashboard): Aggregated data for consumers
 
 Includes realistic simulation of:
@@ -349,7 +349,7 @@ class Simulator:
         """Execute one simulation tick.
 
         Realistic update intervals (assuming 1 second tick):
-        - Sensors (_historian): Every tick (1s) - real-time process data
+        - Sensors (_raw): Every tick (1s) - real-time process data
         - Machine states: Every tick (1s) - state machine updates
         - Jobs: Every tick (1s) - position tracking
         - Solar: Every 5s - power generation readings
@@ -505,7 +505,7 @@ class Simulator:
                 continue
             for sensor_id, generator in cell.sensors.items():
                 reading = generator.generate(cell.state)
-                topic = f"{cell.config.area_id}/{cell_id}/_historian/process/{sensor_id}"
+                topic = f"{cell.config.area_id}/{cell_id}/_raw/process/{sensor_id}"
                 self._mqtt.publish(
                     topic, reading, retain=False, required_level=ComplexityLevel.LEVEL_1_SENSORS
                 )
@@ -1012,7 +1012,7 @@ class Simulator:
         # Per-array readings (historian data - no retention)
         for array in self._solar_gen.arrays:
             reading = self._solar_gen.generate_power_reading(array)
-            topic = f"_historian/solar/{array.array_id}"
+            topic = f"_raw/solar/{array.array_id}"
             self._mqtt.publish(
                 topic, reading, retain=False, required_level=ComplexityLevel.LEVEL_1_SENSORS
             )
@@ -1456,7 +1456,7 @@ class Simulator:
         )
 
         # Booth sensor data (non-retained historian)
-        topic = f"finishing/coating_line_01/_historian/booth"
+        topic = f"finishing/coating_line_01/_raw/booth"
         self._mqtt.publish(
             topic, line.coating_booth.to_sensor_dict(), retain=False, required_level=ComplexityLevel.LEVEL_1_SENSORS
         )
@@ -1468,7 +1468,7 @@ class Simulator:
         )
 
         # Drying oven sensor data
-        topic = f"finishing/coating_line_01/_historian/drying_oven"
+        topic = f"finishing/coating_line_01/_raw/drying_oven"
         self._mqtt.publish(
             topic, line.drying_oven.to_sensor_dict(), retain=False, required_level=ComplexityLevel.LEVEL_1_SENSORS
         )
@@ -1480,7 +1480,7 @@ class Simulator:
         )
 
         # Curing oven sensor data
-        topic = f"finishing/coating_line_01/_historian/curing_oven"
+        topic = f"finishing/coating_line_01/_raw/curing_oven"
         self._mqtt.publish(
             topic, line.curing_oven.to_sensor_dict(), retain=False, required_level=ComplexityLevel.LEVEL_1_SENSORS
         )

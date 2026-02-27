@@ -52,7 +52,7 @@ def validate_percentage(value: float) -> bool:
 
 
 # =============================================================================
-# Sensor Payload Tests (Level 1 - _historian)
+# Sensor Payload Tests (Level 1 - _raw)
 # =============================================================================
 
 

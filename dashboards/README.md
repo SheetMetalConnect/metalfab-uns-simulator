@@ -8,9 +8,8 @@ Browser-based dashboards that connect to MQTT via WebSocket for live factory mon
 
 | Dashboard | File | Description |
 |-----------|------|-------------|
+| Factory Overview | `eindhoven-premium.html` | All machines with sparklines, OEE, drill-down to OEE detail |
 | OEE Deep Dive | `oee-dashboard.html` | Single-machine OEE drill-down: A/P/Q breakdown, downtime Pareto, state timeline |
-| Factory Overview | `eindhoven-overview.html` | Machine status, jobs, OEE for all Eindhoven assets |
-| Premium Dashboard | `eindhoven-premium.html` | Enhanced visuals with sparkline charts and trends |
 | Powder Coating Line | `coating_line_dashboard.html` | Zone tracking, RAL colors, process flow |
 | Warehouse & Logistics | `warehouse_dashboard.html` | AGV fleet, inventory, material flow |
 | Landing Page | `index.html` | Dashboard launcher with MQTT connection status |
@@ -34,7 +33,7 @@ Browser-based dashboards that connect to MQTT via WebSocket for live factory mon
 ### Open a Dashboard
 
 ```bash
-open dashboards/eindhoven-overview.html
+open dashboards/eindhoven-premium.html
 ```
 
 Or use the launcher:

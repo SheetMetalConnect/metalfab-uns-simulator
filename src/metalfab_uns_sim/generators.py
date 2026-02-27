@@ -4,7 +4,7 @@ This module provides realistic data generation for a metalworking/sheet metal
 fabrication facility, including:
 
 - **Descriptive Namespace** (_meta): Asset metadata, OEM info, service dates
-- **Functional Namespace** (_state, _historian, _erp, _mes): Real-time operations
+- **Functional Namespace** (_state, _raw, _erp, _mes): Real-time operations
 - **Informative Namespace** (_dashboard): Aggregated data for consumers
 
 ERP Integration follows Pattern A (On-Demand Fetch) from UMH docs:
@@ -1077,7 +1077,7 @@ class CoatingBoothState:
         }
 
     def to_sensor_dict(self) -> Dict[str, Any]:
-        """Convert to sensor readings for _historian namespace."""
+        """Convert to sensor readings for _raw namespace."""
         return {
             "booth_temp_c": round(self.booth_temp_c + random.gauss(0, 0.5), 1),
             "humidity_pct": round(self.humidity_pct + random.gauss(0, 2), 1),
@@ -1120,7 +1120,7 @@ class OvenState:
         }
 
     def to_sensor_dict(self) -> Dict[str, Any]:
-        """Convert to sensor readings for _historian namespace."""
+        """Convert to sensor readings for _raw namespace."""
         # Simulate zone temperatures with slight variation
         zone_temps = [
             round(self.internal_temp_c + random.gauss(0, 2), 1)
@@ -1666,7 +1666,7 @@ class SensorGenerator:
         return self._compute_value(state)
 
     def generate(self, state: PackMLState = PackMLState.EXECUTE) -> Dict[str, Any]:
-        """Generate a sensor reading with timestamp (for _historian)."""
+        """Generate a sensor reading with timestamp (for _raw)."""
         value = self._compute_value(state)
         return {
             "timestamp_ms": int(time.time() * 1000),

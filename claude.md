@@ -32,7 +32,7 @@ The simulator supports 4 complexity levels, controlled via MQTT topic subscripti
 
 | Level | Name | Features | Namespaces |
 |-------|------|----------|------------|
-| 1 | Sensors | Stateless sensor data only | `_historian` |
+| 1 | Sensors | Stateless sensor data only | `_raw` |
 | 2 | Stateful | + MQTT retain, jobs, positions | + `_state`, `_meta`, `_jobs` |
 | 3 | ERP/MES | + Quality, margins, lead times, OEE, dashboards | + `_erp`, `_mes`, `_dashboard` |
 | 4 | Full | + DPP, analytics, events, alarms | + `_analytics`, `_event`, `_alarms`, `_dpp` |
@@ -168,7 +168,7 @@ The simulator uses realistic update intervals that mirror real industrial system
 
 | Data Type | Interval | Reason |
 |-----------|----------|--------|
-| Sensors (_historian) | 1s | Real-time process data |
+| Sensors (_raw) | 1s | Real-time process data |
 | Machine states (_state) | 1s | PackML state machine updates |
 | Jobs (_jobs) | 1s | Position tracking |
 | Solar power | 5s | Power generation readings |
@@ -193,7 +193,7 @@ Retained topics (keep last value):
 - ✅ Raw material summary (`_erp/inventory/raw_materials`) - Inventory reference
 
 Non-retained topics (transient):
-- ❌ Sensor data (`_historian/*`) - Time-series data
+- ❌ Sensor data (`_raw/*`) - Time-series data
 - ❌ ERP energy metrics (`_erp/energy`) - Aggregated transient data
 - ❌ MES quality (`_mes/quality/*`) - Calculated metrics
 - ❌ OEE (`_mes/oee/*`) - Calculated metrics
@@ -243,9 +243,9 @@ finishing/coating_line_01/
   ├── _state/summary                       # Zone summary (retained)
   ├── _state/booth                         # Booth state (retained)
   ├── _state/traversals/{traversal_id}     # Individual parts on hooks (retained)
-  ├── _historian/booth                     # Booth sensors (streaming)
-  ├── _historian/drying_oven               # Oven sensors (streaming)
-  ├── _historian/curing_oven               # Oven sensors (streaming)
+  ├── _raw/booth                     # Booth sensors (streaming)
+  ├── _raw/drying_oven               # Oven sensors (streaming)
+  ├── _raw/curing_oven               # Oven sensors (streaming)
   └── _mes/planning/
       ├── summary                          # Planning summary (retained)
       ├── queue                            # Order queue (streaming)
@@ -307,7 +307,7 @@ umh/v1/{enterprise}/{site}/{area}/{cell}/{namespace}/{...}
 ```
 
 Example topics:
-- `umh/v1/acme_metalworks/plant_vienna/cutting/laser_01/_historian/process/laser_power_pct`
+- `umh/v1/acme_metalworks/plant_vienna/cutting/laser_01/_raw/process/laser_power_pct`
 - `umh/v1/acme_metalworks/plant_vienna/cutting/laser_01/_state`
 - `umh/v1/acme_metalworks/plant_vienna/_jobs/active/JOB_9942`
 - `umh/v1/acme_metalworks/plant_vienna/_erp/energy`

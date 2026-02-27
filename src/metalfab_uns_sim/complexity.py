@@ -93,7 +93,7 @@ def get_namespaces_for_level(level: ComplexityLevel) -> Set[str]:
     namespaces = set()
 
     if level >= ComplexityLevel.LEVEL_1_SENSORS:
-        namespaces.add("_historian")  # Sensor time-series
+        namespaces.add("_raw")  # Sensor time-series (UMH data contract)
 
     if level >= ComplexityLevel.LEVEL_2_STATEFUL:
         namespaces.add("_state")  # Machine/job state

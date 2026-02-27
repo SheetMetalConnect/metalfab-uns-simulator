@@ -202,7 +202,7 @@ class TestLevelSwitcherSimulator:
         # Check that publish was called with Level 1 requirement for sensors
         sensor_calls = [
             c for c in mock_mqtt.publish.call_args_list
-            if "_historian" in str(c)
+            if "_raw" in str(c)
         ]
         assert len(sensor_calls) > 0
 

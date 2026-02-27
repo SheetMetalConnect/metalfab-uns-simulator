@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Poedercoating Lijn - Eindhoven</title>
+    <title>Powder Coating Line - Eindhoven</title>
     <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
     <style>
         * {
@@ -196,7 +196,11 @@
         }
         
         .zone-emoji {
-            font-size: 32px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             margin-bottom: 8px;
         }
         
@@ -354,15 +358,18 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>
-            🎨 Poedercoating Lijn
-        </h1>
+    <div style="background: #0a0e1a; border-bottom: 1px solid #1a1f2e; padding: 8px 20px; font-size: 13px; color: #9ca3af;">
+        <a href="eindhoven-premium.html" style="color: #60a5fa; text-decoration: none;">&larr; Factory Overview</a>
+        &nbsp;|&nbsp; Powder Coating Line
+    </div>
+
+    <div class="header" style="padding-top: 20px;">
+        <h1>Powder Coating Line</h1>
         <div class="subtitle">
-            Eindhoven Finishing • Updated: <span id="timestamp"></span>
+            Eindhoven Finishing &bull; Updated: <span id="timestamp"></span>
             <span id="connectionStatus" class="connection-status" style="margin-left: 16px;">
                 <span class="status-dot"></span>
-                Verbinding maken...
+                Connecting...
             </span>
         </div>
     </div>
@@ -402,62 +409,62 @@
         <div class="zones-container" id="zonesContainer">
             <div class="zone">
                 <div class="zone-icon" id="zone-loading">
-                    <div class="zone-emoji">📥</div>
+                    <div class="zone-emoji">LOAD</div>
                     <div class="zone-count" id="count-loading">0</div>
                 </div>
                 <div class="zone-label">Loading</div>
                 <div class="zone-parts">parts</div>
             </div>
-            
-            <div class="arrow">→</div>
-            
+
+            <div class="arrow">&rarr;</div>
+
             <div class="zone">
                 <div class="zone-icon" id="zone-pretreatment">
-                    <div class="zone-emoji">🧪</div>
+                    <div class="zone-emoji">WASH</div>
                     <div class="zone-count" id="count-pretreatment">0</div>
                 </div>
                 <div class="zone-label">Pre-Treatment</div>
                 <div class="zone-parts">parts</div>
             </div>
-            
-            <div class="arrow">→</div>
-            
+
+            <div class="arrow">&rarr;</div>
+
             <div class="zone">
                 <div class="zone-icon" id="zone-drying">
-                    <div class="zone-emoji">💨</div>
+                    <div class="zone-emoji">DRY</div>
                     <div class="zone-count" id="count-drying">0</div>
                 </div>
                 <div class="zone-label">Drying</div>
                 <div class="zone-parts">parts</div>
             </div>
-            
-            <div class="arrow">→</div>
-            
+
+            <div class="arrow">&rarr;</div>
+
             <div class="zone">
                 <div class="zone-icon" id="zone-coating">
-                    <div class="zone-emoji">🎨</div>
+                    <div class="zone-emoji">COAT</div>
                     <div class="zone-count" id="count-coating">0</div>
                 </div>
                 <div class="zone-label">Coating</div>
                 <div class="zone-parts">parts</div>
             </div>
-            
-            <div class="arrow">→</div>
-            
+
+            <div class="arrow">&rarr;</div>
+
             <div class="zone">
                 <div class="zone-icon" id="zone-curing">
-                    <div class="zone-emoji">🔥</div>
+                    <div class="zone-emoji">CURE</div>
                     <div class="zone-count" id="count-curing">0</div>
                 </div>
                 <div class="zone-label">Curing</div>
                 <div class="zone-parts">parts</div>
             </div>
-            
-            <div class="arrow">→</div>
-            
+
+            <div class="arrow">&rarr;</div>
+
             <div class="zone">
                 <div class="zone-icon" id="zone-cooling">
-                    <div class="zone-emoji">❄️</div>
+                    <div class="zone-emoji">COOL</div>
                     <div class="zone-count" id="count-cooling">0</div>
                 </div>
                 <div class="zone-label">Cooling</div>
@@ -538,7 +545,7 @@
 
         // Connect to MQTT
         function connectMQTT() {
-            console.log('Verbinden met MQTT:', MQTT_BROKER);
+            console.log('Connecting to MQTT:', MQTT_BROKER);
 
             client = mqtt.connect(MQTT_BROKER, {
                 reconnectPeriod: 1000,
@@ -546,7 +553,7 @@
             });
 
             client.on('connect', () => {
-                console.log('Verbonden met MQTT broker');
+                console.log('Connected to MQTT broker');
                 updateConnectionStatus(true);
 
                 // Subscribe to coating line topics
@@ -558,14 +565,14 @@
 
                 topics.forEach(topic => {
                     client.subscribe(topic, (err) => {
-                        if (!err) console.log('Geabonneerd op:', topic);
+                        if (!err) console.log('Subscribed:', topic);
                     });
                 });
             });
 
             client.on('message', handleMessage);
             client.on('error', (err) => {
-                console.error('MQTT Fout:', err);
+                console.error('MQTT Error:', err);
                 updateConnectionStatus(false);
             });
             client.on('offline', () => updateConnectionStatus(false));
@@ -575,10 +582,10 @@
             const status = document.getElementById('connectionStatus');
             if (connected) {
                 status.className = 'connection-status connected';
-                status.innerHTML = '<span class="status-dot"></span> Verbonden';
+                status.innerHTML = '<span class="status-dot"></span> Connected';
             } else {
                 status.className = 'connection-status disconnected';
-                status.innerHTML = '<span class="status-dot"></span> Niet verbonden';
+                status.innerHTML = '<span class="status-dot"></span> Disconnected';
             }
         }
 
@@ -586,7 +593,7 @@
         function handleMessage(topic, message) {
             messageCount++;
             const payload = message.toString();
-            console.log('📨 Ontvangen:', topic);
+            console.log('Received:', topic);
 
             try {
                 // Dashboard/Summary - contains all main metrics
@@ -625,7 +632,7 @@
                 }
 
             } catch (e) {
-                console.error('❌ Fout bij verwerken:', topic, e);
+                console.error('Error processing:', topic, e);
             }
         }
 

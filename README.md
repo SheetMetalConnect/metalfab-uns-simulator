@@ -63,6 +63,15 @@ pytest
 - [Digital Product Passport](docs/dpp.md) — ESPR compliance, CO2 tracking
 - [Architecture](docs/architecture.md) — site layout, machine types, complexity levels
 
+## Use with UMH Core Stack
+
+This simulator integrates with [Luke's UMH Starter Kit](https://github.com/SheetMetalConnect/UMH-Core-Stack) — an opinionated, batteries-included UMH Core stack. The starter kit's historian flow automatically persists `_raw` sensor data from this simulator to TimescaleDB.
+
+```bash
+# From the UMH-Core-Stack repo
+docker compose -f docker-compose.yaml -f examples/simulator/docker-compose.simulator.yaml up -d
+```
+
 ## License
 
 MIT

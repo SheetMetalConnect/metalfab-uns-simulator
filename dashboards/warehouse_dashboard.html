@@ -424,12 +424,17 @@
     </style>
 </head>
 <body>
-    <div class="header">
+    <div style="background: #0a0e1a; border-bottom: 1px solid #1a1f2e; padding: 8px 20px; font-size: 13px; color: #9ca3af;">
+        <a href="eindhoven-premium.html" style="color: #60a5fa; text-decoration: none;">&larr; Factory Overview</a>
+        &nbsp;|&nbsp; Warehouse &amp; Logistics
+    </div>
+
+    <div class="header" style="padding-top: 20px;">
         <div>
-            <h1>📦 Warehouse & Logistics</h1>
+            <h1>Warehouse &amp; Logistics</h1>
             <div class="subtitle">
-                Eindhoven Warehouse Operations • Updated: <span id="timestamp"></span>
-                <button class="refresh-btn" onclick="location.reload()">🔄 Refresh</button>
+                Eindhoven Warehouse Operations &bull; Updated: <span id="timestamp"></span>
+                <button class="refresh-btn" onclick="location.reload()">Refresh</button>
             </div>
         </div>
         <div id="connectionStatus" class="connection-status">
@@ -458,16 +463,16 @@
     </div>
 
     <div class="section-title">
-        🤖 Automated Guided Vehicles
-        <span class="section-subtitle">• Fleet Status</span>
+        Automated Guided Vehicles
+        <span class="section-subtitle">&bull; Fleet Status</span>
     </div>
 
     <div class="agv-grid" id="agvContainer"></div>
 
     <div class="inventory-section">
         <div class="section-title">
-            📊 Material Inventory
-            <span class="section-subtitle">• Current Stock Levels</span>
+            Material Inventory
+            <span class="section-subtitle">&bull; Current Stock Levels</span>
         </div>
 
         <div class="warehouse-grid" id="inventoryContainer"></div>
@@ -603,7 +608,7 @@
                 </div>
 
                 <div class="agv-visual">
-                    <div class="agv-icon">🚛</div>
+                    <div class="agv-icon" style="font-size: 24px; font-weight: 700; color: #94a3b8;">AGV</div>
                     <div class="agv-state">State: ${agv.state}</div>
                     <div class="agv-job">${hasJob ? agv.job.JobID : 'No Active Job'}</div>
                 </div>
@@ -714,7 +719,7 @@
                 }).join('');
 
                 card.innerHTML = `
-                    <div class="warehouse-name">📍 Warehouse ${warehouse}</div>
+                    <div class="warehouse-name">Warehouse ${warehouse}</div>
                     <div class="inventory-table">
                         <div class="inventory-row inventory-header">
                             <div>Material</div>

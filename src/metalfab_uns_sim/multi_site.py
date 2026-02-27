@@ -99,6 +99,44 @@ class MachineState(Enum):
     ABORTED = 7
 
 
+# Stop reason codes — modeled after real sheet metal shop-floor classifications
+STOP_REASONS = {
+    # Changeovers (between jobs)
+    "changeover": [
+        ("ST01", "Sheet Size Changeover"),
+        ("ST02", "Tool/Die Change"),
+        ("ST03", "Material Change"),
+        ("ST04", "NC Program Load"),
+        ("ST05", "Fixture Setup"),
+    ],
+    # Planned stops
+    "planned": [
+        ("PS01", "Lunch Break"),
+        ("PS02", "Shift Change"),
+        ("PS03", "Planned Maintenance"),
+        ("PS04", "Tooling Inspection"),
+    ],
+    # Breakdowns (longer HELD, slower recovery)
+    "breakdown": [
+        ("BD01", "Laser Source Error"),
+        ("BD02", "Hydraulic Pressure Loss"),
+        ("BD03", "Drive Axis Fault"),
+        ("BD04", "Chiller Overtemp"),
+        ("BD05", "Safety Circuit Trip"),
+        ("BD06", "Gas Supply Fault"),
+    ],
+    # Microstops (brief HELD, fast auto-recovery)
+    "microstop": [
+        ("MS01", "Sheet Misposition"),
+        ("MS02", "Nozzle Collision Detect"),
+        ("MS03", "Part Tip-Up"),
+        ("MS04", "Slug Jam"),
+        ("MS05", "Backgauge Timeout"),
+        ("MS06", "Wire Feed Stall"),
+    ],
+}
+
+
 @dataclass
 class Machine:
     """Represents a machine/cell with all its data."""
@@ -160,6 +198,12 @@ class Machine:
     idle_minutes: float = 0.0
     shift_duration_minutes: float = 0.0
 
+    # Stop reason tracking
+    stop_reason_code: str = ""       # e.g. "ST02", "BD01", "MS03"
+    stop_reason_name: str = ""       # e.g. "Size Changeover"
+    stop_category: str = ""          # "changeover", "planned", "breakdown", "microstop"
+    stop_since: Optional[float] = None  # timestamp when stop began
+
     def __post_init__(self):
         self.asset_id = random.randint(1, 999)
         self.in_service = f"20{random.randint(18, 24)}-{random.randint(1,12):02d}-{random.randint(1,28):02d}"
@@ -214,6 +258,22 @@ class Machine:
                 "Status": 0,
             }
 
+    def _set_stop_reason(self, category: str):
+        """Assign a random stop reason from the given category."""
+        reasons = STOP_REASONS.get(category, [("XX00", "Unknown")])
+        code, name = random.choice(reasons)
+        self.stop_reason_code = code
+        self.stop_reason_name = name
+        self.stop_category = category
+        self.stop_since = time.time()
+
+    def _clear_stop_reason(self):
+        """Clear stop reason when returning to productive state."""
+        self.stop_reason_code = ""
+        self.stop_reason_name = ""
+        self.stop_category = ""
+        self.stop_since = None
+
     def tick(self):
         """Update machine state for one tick."""
         now = time.time()
@@ -233,12 +293,23 @@ class Machine:
         if shift_elapsed >= SHIFT_DURATION_S:
             self._reset_shift(now)
 
-        # Simulate state changes
-        if self.state == MachineState.IDLE and random.random() < 0.1:
-            self.state = MachineState.STARTING
-            self._start_new_job()
+        # Simulate state changes with stop reason assignment
+        if self.state == MachineState.IDLE:
+            if random.random() < 0.1:
+                self.state = MachineState.STARTING
+                self._clear_stop_reason()
+                self._start_new_job()
+            elif not self.stop_reason_code:
+                # Assign a stop reason for idle (changeover or planned)
+                if random.random() < 0.7:
+                    self._set_stop_reason("changeover")
+                else:
+                    self._set_stop_reason("planned")
+
         elif self.state == MachineState.STARTING:
             self.state = MachineState.EXECUTE
+            self._clear_stop_reason()
+
         elif self.state == MachineState.EXECUTE:
             # Update counters
             if random.random() < 0.3:
@@ -254,19 +325,36 @@ class Machine:
                 self._shift_waste += 1
                 self.parts_scrap += 1
 
-            # Random breakdown (HELD state) - 0.3% chance per tick
-            if random.random() < 0.003:
+            # Microstop (brief, 2% chance) — auto-recovers in 1-5 ticks
+            if random.random() < 0.02:
                 self.state = MachineState.HELD
+                self._set_stop_reason("microstop")
 
-            # Randomly complete job
+            # Breakdown (longer, 0.3% chance)
+            elif random.random() < 0.003:
+                self.state = MachineState.HELD
+                self._set_stop_reason("breakdown")
+
+            # Job complete
             elif random.random() < 0.02:
                 self.state = MachineState.COMPLETING
+                self._set_stop_reason("changeover")
+
         elif self.state == MachineState.HELD:
-            # 10% chance to recover from breakdown each tick
-            if random.random() < 0.10:
-                self.state = MachineState.EXECUTE
+            if self.stop_category == "microstop":
+                # Microstops recover fast: 40% chance per tick (avg ~2.5 ticks)
+                if random.random() < 0.40:
+                    self.state = MachineState.EXECUTE
+                    self._clear_stop_reason()
+            else:
+                # Breakdowns recover slower: 5% chance per tick (avg ~20 ticks)
+                if random.random() < 0.05:
+                    self.state = MachineState.EXECUTE
+                    self._clear_stop_reason()
+
         elif self.state == MachineState.COMPLETING:
             self.state = MachineState.IDLE
+            self._set_stop_reason("changeover")
             self._clear_job()
 
         # Update edge data
@@ -795,6 +883,20 @@ class SemanticPublisher:
         # Edge/State - current machine state code
         self.publish(f"{base}/Edge/State", machine.state.value, retain=False)
         self.publish(f"{base}/Edge/StateName", machine.state.name, retain=False)
+
+        # Edge/StopReason - stop code when not producing (for OEE Pareto)
+        if machine.stop_reason_code:
+            self.publish(f"{base}/Edge/StopReason", {
+                "code": machine.stop_reason_code,
+                "name": machine.stop_reason_name,
+                "category": machine.stop_category,
+            }, retain=False)
+        else:
+            self.publish(f"{base}/Edge/StopReason", {
+                "code": "",
+                "name": "",
+                "category": "",
+            }, retain=False)
 
         # Edge/Infeed, Outfeed, Waste - streaming counters
         self.publish(f"{base}/Edge/Infeed", machine.infeed, retain=False)

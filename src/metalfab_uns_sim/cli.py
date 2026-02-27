@@ -156,7 +156,7 @@ def status():
     click.echo("  umh/v1/{enterprise}/{site}/{area}/{cell}/{namespace}/...")
     click.echo()
     click.echo("Namespaces by Level:")
-    click.echo("  Level 1: _historian (sensors)")
+    click.echo("  Level 1: _raw (sensors)")
     click.echo("  Level 2: + _state, _meta, _jobs")
     click.echo("  Level 3: + _erp, _mes, _analytics")
     click.echo("  Level 4: + _dashboard, _event, _alarms")

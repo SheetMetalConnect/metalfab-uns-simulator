@@ -380,7 +380,7 @@ class MQTTClientWrapper:
             "cache_file_size_bytes": CACHE_FILE.stat().st_size if CACHE_FILE.exists() else 0
         }
 
-        topic = f"{self._uns_base}/_historian/activity"
+        topic = f"{self._uns_base}/_raw/activity"
         self.client.publish(topic, json.dumps(metrics), qos=0, retain=False)
 
     async def publish_message(self, topic: str, payload: str, retain: bool = False, qos: int = 1) -> dict[str, Any]:
@@ -505,7 +505,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_dashboard",
-            description="Get Dashboard namespace data for a machine (Asset info, current Job, OEE metrics). Example: site='eindhoven', area='cutting', machine='laser_01'",
+            description="Get Dashboard namespace data for a machine (Asset info, current Job, OEE metrics, current state and stop reason). Example: site='eindhoven', area='cutting', machine='laser_01'",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -820,6 +820,7 @@ async def handle_get_dashboard(arguments: dict[str, Any]) -> list[TextContent]:
         return [TextContent(type="text", text="Error: site, area, and machine are required")]
 
     base = f"umh/v1/metalfab/{site}/{area}/{machine}/Dashboard"
+    edge_base = f"umh/v1/metalfab/{site}/{area}/{machine}/Edge"
     cache = mqtt_client.get_all_topics()
 
     # Collect dashboard topics
@@ -838,6 +839,25 @@ async def handle_get_dashboard(arguments: dict[str, Any]) -> list[TextContent]:
         f"**Site:** {site} | **Area:** {area}",
         ""
     ]
+
+    # Current state and stop reason from Edge namespace
+    state_topic = f"{edge_base}/StateName"
+    stop_topic = f"{edge_base}/StopReason"
+    state_raw = cache.get(state_topic, {}).get("value", "UNKNOWN")
+    state_val = state_raw.strip('"') if isinstance(state_raw, str) else state_raw
+    stop_raw = cache.get(stop_topic, {}).get("value")
+
+    output.append("## Current State")
+    output.append(f"- **State:** {state_val}")
+    if stop_raw:
+        try:
+            stop_val = json.loads(stop_raw) if isinstance(stop_raw, str) else stop_raw
+            if stop_val.get("code"):
+                output.append(f"- **Stop Reason:** {stop_val['code']} — {stop_val.get('name', '')}")
+                output.append(f"- **Category:** {stop_val.get('category', '')}")
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    output.append("")
 
     # Group by category
     asset = {k: v for k, v in dashboard_data.items() if k.startswith("Asset/")}
