@@ -63,14 +63,40 @@ pytest
 - [Digital Product Passport](docs/dpp.md) — ESPR compliance, CO2 tracking
 - [Architecture](docs/architecture.md) — site layout, machine types, complexity levels
 
+## UMH Data Contracts
+
+The simulator publishes data using two UMH data contract conventions:
+
+**`_raw` (all machines)** — Unvalidated sensor data. Works out of the box with the starter kit's historian flow.
+```
+umh/v1/metalfab/{site}/{dept}/{machine}/_raw/{tag_name}   → bare value (85.5, "EXECUTE")
+```
+
+**`_energy-monitor_v1` (energy data)** — Validated data contract example. Requires a matching data model in UMH Core.
+```
+umh/v1/metalfab/{site}/energy/main/_energy-monitor_v1/{tag_name}   → bare value (45.2)
+```
+
+Both publish alongside the existing `Edge/`, `Line/`, `Dashboard/` topics used by the browser dashboards.
+
 ## Use with UMH Core Stack
 
-This simulator integrates with [Luke's UMH Starter Kit](https://github.com/SheetMetalConnect/UMH-Core-Stack) — an opinionated, batteries-included UMH Core stack. The starter kit's historian flow automatically persists `_raw` sensor data from this simulator to TimescaleDB.
+This simulator integrates with [Luke's UMH Starter Kit](https://github.com/SheetMetalConnect/UMH-Core-Stack) — an opinionated, batteries-included UMH Core stack.
 
 ```bash
 # From the UMH-Core-Stack repo
 docker compose -f docker-compose.yaml -f examples/simulator/docker-compose.simulator.yaml up -d
 ```
+
+Then deploy these flows via Management Console → Data Flows → Stand-alone:
+
+| Flow | File in starter kit | Purpose |
+|------|-------------------|---------|
+| Simulator Bridge | `examples/simulator/flows/simulator_to_uns_bridge.yaml` | Routes simulator data into UMH Core |
+| Historian | `examples/databridges/flows/historian.yaml` | Persists `_raw` → TimescaleDB |
+| Energy Historian | `examples/simulator/flows/energy_historian.yaml` | Persists `_energy-monitor_v1` → TimescaleDB |
+
+End-to-end: Simulator → HiveMQ → UMH Core → historian → TimescaleDB → Grafana
 
 ## License
 

@@ -869,6 +869,13 @@ class SemanticPublisher:
         self.publish(f"{base}/Asset/SerialNumber", machine.serial_number)
         self.publish(f"{base}/Asset/MachineType", machine.machine_type)
 
+    @staticmethod
+    def _to_raw_tag(name: str) -> str:
+        """Convert CamelCase sensor name to snake_case _raw tag name."""
+        import re
+        s1 = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1_\2', name)
+        return re.sub(r'([a-z\d])([A-Z])', r'\1_\2', s1).lower().replace(" ", "_")
+
     def publish_machine_functional(self, site_id: str, machine: Machine):
         """Publish Edge/ and Line/ namespaces - real-time operational data."""
         base = f"{self.prefix}/{site_id}/{machine.department}/{machine.machine_id}"
@@ -902,6 +909,22 @@ class SemanticPublisher:
         self.publish(f"{base}/Edge/Infeed", machine.infeed, retain=False)
         self.publish(f"{base}/Edge/Outfeed", machine.outfeed, retain=False)
         self.publish(f"{base}/Edge/Waste", machine.waste, retain=False)
+
+        # =====================================================================
+        # _raw — UMH Core data contract (streaming, NOT retained)
+        # Publishes same sensor values as Edge/ but using the _raw data contract
+        # convention so they're automatically picked up by the historian flow
+        # and persisted to TimescaleDB via: _raw → historian → tag/tag_string
+        # =====================================================================
+        for sensor_name, value in machine.edge_data.items():
+            val = round(value, 2) if isinstance(value, float) else value
+            self.publish(f"{base}/_raw/{self._to_raw_tag(sensor_name)}", val, retain=False)
+
+        self.publish(f"{base}/_raw/state", machine.state.value, retain=False)
+        self.publish(f"{base}/_raw/state_name", machine.state.name, retain=False)
+        self.publish(f"{base}/_raw/infeed", machine.infeed, retain=False)
+        self.publish(f"{base}/_raw/outfeed", machine.outfeed, retain=False)
+        self.publish(f"{base}/_raw/waste", machine.waste, retain=False)
 
         # Edge/ShopFloor/ - Job context (Level 2+, retained for job tracking)
         if self._level >= ComplexityLevel.LEVEL_2_STATEFUL:
@@ -952,6 +975,14 @@ class SemanticPublisher:
             self.publish(f"{base}/Line/OEE/DowntimeMinutes", machine.downtime_minutes)
             self.publish(f"{base}/Line/OEE/IdleMinutes", machine.idle_minutes)
             self.publish(f"{base}/Line/OEE/ShiftDurationMinutes", machine.shift_duration_minutes)
+
+            # _raw OEE — persisted to TimescaleDB by historian flow
+            self.publish(f"{base}/_raw/oee.availability", round(machine.availability, 3), retain=False)
+            self.publish(f"{base}/_raw/oee.quality", round(machine.quality, 3), retain=False)
+            self.publish(f"{base}/_raw/oee.performance", round(machine.performance, 3), retain=False)
+            self.publish(f"{base}/_raw/oee.oee", round(machine.oee, 3), retain=False)
+            self.publish(f"{base}/_raw/parts_produced", machine.parts_produced, retain=False)
+            self.publish(f"{base}/_raw/parts_scrap", machine.parts_scrap, retain=False)
 
     def publish_machine_informative(self, site_id: str, machine: Machine):
         """Publish Dashboard/ namespace - aggregated views (Level 3+, retained)."""
@@ -1032,6 +1063,12 @@ class SemanticPublisher:
         self.publish(f"{base}/Edge/CoatingBooth/CurrentRAL", coating.current_ral)
         self.publish(f"{base}/Edge/CoatingBooth/CurrentColor", coating.current_ral_name)
         self.publish(f"{base}/Edge/CoatingBooth/LastColorChange", coating.last_color_change)
+
+        # _raw — UMH Core data contract for coating sensors
+        self.publish(f"{base}/_raw/oven_temp_c", round(coating.oven_temp_c, 1), retain=False)
+        self.publish(f"{base}/_raw/booth_humidity_pct", round(coating.booth_humidity_pct, 1), retain=False)
+        self.publish(f"{base}/_raw/conveyor_speed_mpm", round(coating.conveyor_speed_mpm, 2), retain=False)
+        self.publish(f"{base}/_raw/current_ral", coating.current_ral, retain=False)
 
         # =====================================================================
         # Line/ - Production data (retained)
@@ -1306,14 +1343,40 @@ class SemanticPublisher:
         self.publish(f"{base}/Line/CostEUR", round(energy.cost_today_eur, 2))
 
         # =====================================================================
+        # _raw — Unvalidated sensor data for historian flow
+        # Topic: umh/v1/metalfab/{site}/energy/main/_raw/{tag}
+        # =====================================================================
+        raw_base = f"{self.prefix}/{site_id}/energy/main"
+        self.publish(f"{raw_base}/_raw/consumption_kw", round(energy.consumption_kw, 2), retain=False)
+        self.publish(f"{raw_base}/_raw/solar_generation_kw", round(energy.solar_generation_kw, 2), retain=False)
+        self.publish(f"{raw_base}/_raw/grid_import_kw", round(energy.grid_import_kw, 2), retain=False)
+        self.publish(f"{raw_base}/_raw/daily_consumption_kwh", round(energy.consumption_kwh_today, 2), retain=False)
+        self.publish(f"{raw_base}/_raw/daily_solar_kwh", round(energy.solar_kwh_today, 2), retain=False)
+        self.publish(f"{raw_base}/_raw/daily_cost_eur", round(energy.cost_today_eur, 2), retain=False)
+
+        # =====================================================================
+        # _energy-monitor_v1 — Validated data contract (educational example)
+        # Same data, but published to a typed contract. When a matching data
+        # model is defined in UMH Core, the bridge validates every message.
+        # Shows how to scale from _raw → structured contracts in production.
+        # Topic: umh/v1/metalfab/{site}/energy/main/_energy-monitor_v1/{tag}
+        # =====================================================================
+        solar_coverage = 0.0
+        if energy.consumption_kw > 0:
+            solar_coverage = min(100, (energy.solar_generation_kw / energy.consumption_kw) * 100)
+
+        self.publish(f"{raw_base}/_energy-monitor_v1/consumption_kw", round(energy.consumption_kw, 2), retain=False)
+        self.publish(f"{raw_base}/_energy-monitor_v1/solar_generation_kw", round(energy.solar_generation_kw, 2), retain=False)
+        self.publish(f"{raw_base}/_energy-monitor_v1/grid_import_kw", round(energy.grid_import_kw, 2), retain=False)
+        self.publish(f"{raw_base}/_energy-monitor_v1/solar_coverage_pct", round(solar_coverage, 1), retain=False)
+        self.publish(f"{raw_base}/_energy-monitor_v1/daily_consumption_kwh", round(energy.consumption_kwh_today, 2), retain=False)
+        self.publish(f"{raw_base}/_energy-monitor_v1/daily_solar_kwh", round(energy.solar_kwh_today, 2), retain=False)
+        self.publish(f"{raw_base}/_energy-monitor_v1/daily_cost_eur", round(energy.cost_today_eur, 2), retain=False)
+
+        # =====================================================================
         # Dashboard/ - Aggregated views (Level 3+, retained)
         # =====================================================================
         if self._level >= ComplexityLevel.LEVEL_3_ERP_MES:
-            # Calculate solar coverage percentage
-            solar_coverage = 0.0
-            if energy.consumption_kw > 0:
-                solar_coverage = min(100, (energy.solar_generation_kw / energy.consumption_kw) * 100)
-
             self.publish(f"{base}/Dashboard/Summary", {
                 "timestamp": datetime.now().isoformat() + "Z",
                 "ConsumptionKW": round(energy.consumption_kw, 2),
