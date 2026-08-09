@@ -39,3 +39,7 @@ dist/
 
 # MCP server cache
 mcp-server/src/metalfab_mqtt_cache.json
+
+# Environment
+.env
+!.env.example
