@@ -300,6 +300,14 @@ class MQTTClient:
             except Exception as e:
                 self._messages_dropped += 1
                 logger.error(f"Error publishing to {msg.topic}: {e}")
+        else:
+            # No client, or the broker connection is gone. Without this branch the
+            # message vanished without a trace and the dropped counter stayed at 0,
+            # so a disconnected simulator looked healthy.
+            self._messages_dropped += 1
+            logger.warning(
+                f"Not connected to MQTT broker - dropped message for {msg.topic}"
+            )
 
     def _subscribe_to_control(self) -> None:
         """Subscribe to control topics for level changes (root level)."""

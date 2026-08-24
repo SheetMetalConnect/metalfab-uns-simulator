@@ -56,6 +56,21 @@ metalfab-sim subscribe
 pytest
 ```
 
+## Environment variables
+
+All optional — every one falls back to the value in `config/`. Set them in the
+compose file or the shell; the simulator reads no `.env`.
+
+| Variable | Default | What it sets |
+|---|---|---|
+| `MQTT_BROKER` | `localhost` | Broker hostname (compose sets `hivemq`) |
+| `MQTT_PORT` | `1883` | Broker port |
+| `MQTT_USERNAME` | *(empty)* | Broker username, if the broker requires auth |
+| `MQTT_PASSWORD` | *(empty)* | Broker password |
+| `UNS_ENTERPRISE` | `acme_metalworks` | Enterprise level of the topic tree |
+| `UNS_SITE` | `plant_vienna` | Site level of the topic tree |
+| `SIMULATION_LEVEL` | `2` | Starting complexity level (0-4) |
+
 ## Reference
 
 - [Topic Reference](docs/topics.md) — complete namespace tree, data types, retention

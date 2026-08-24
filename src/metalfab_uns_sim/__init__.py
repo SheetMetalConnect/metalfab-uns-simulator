@@ -1,6 +1,6 @@
 """MetalFab UNS Simulator - MQTT-based manufacturing simulation."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .simulator import Simulator
 from .config import Config

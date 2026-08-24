@@ -731,6 +731,12 @@ class SemanticPublisher:
         self._level = ComplexityLevel.LEVEL_2_STATEFUL
         self.prefix = "umh/v1/metalfab"
 
+        # Publish health. Every publish_* method routes through publish(), so this
+        # is the one place a rejected publish can be noticed.
+        self.messages_published = 0
+        self.messages_dropped = 0
+        self._publish_ok = True
+
         # Callbacks for control messages
         self._level_callback = None
         self._site_callback = None
@@ -837,11 +843,15 @@ class SemanticPublisher:
 
     def clear_retained(self, topics: List[str]):
         """Clear retained messages by publishing empty payload with retain=True."""
-        count = 0
+        before = self.messages_dropped
         for topic in topics:
-            self.client.publish(topic, "", retain=True, qos=1)
-            count += 1
-        logger.info(f"Cleared {count} retained topics")
+            self._record_publish(topic, self.client.publish(topic, "", retain=True, qos=1))
+        dropped = self.messages_dropped - before
+        cleared = len(topics) - dropped
+        if dropped:
+            logger.warning(f"Cleared {cleared} retained topics, {dropped} rejected by the broker")
+        else:
+            logger.info(f"Cleared {cleared} retained topics")
 
     def publish(self, topic: str, value: Any, retain: bool = True):
         """Publish a value - can be simple value or dict."""
@@ -854,7 +864,33 @@ class SemanticPublisher:
         else:
             payload = str(value)
 
-        self.client.publish(topic, payload, retain=retain, qos=1)
+        info = self.client.publish(topic, payload, retain=retain, qos=1)
+        self._record_publish(topic, info)
+
+    def _record_publish(self, topic: str, info) -> None:
+        """Count a publish and log only on a health transition.
+
+        paho returns MQTT_ERR_NO_CONN (and friends) instead of raising, so an
+        unchecked publish() made a disconnected simulator look like a running one.
+        Logging every rejected message would flood at tick rate, so only the
+        healthy->failing and failing->healthy transitions are logged.
+        """
+        rc = getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS)
+        if rc == mqtt.MQTT_ERR_SUCCESS:
+            self.messages_published += 1
+            if not self._publish_ok:
+                self._publish_ok = True
+                logger.info(
+                    f"Publishing recovered after {self.messages_dropped} dropped messages"
+                )
+            return
+
+        self.messages_dropped += 1
+        if self._publish_ok:
+            self._publish_ok = False
+            logger.warning(
+                f"Broker rejected publish to {topic} (rc={rc}) - messages are being dropped"
+            )
 
     def publish_machine_descriptive(self, site_id: str, machine: Machine):
         """Publish Asset/ namespace - static metadata (retained, published once)."""

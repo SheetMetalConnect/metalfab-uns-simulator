@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "metalfab-uns-simulator"
-version = "0.1.0"
+dynamic = ["version"]
 description = "MQTT-based UNS simulator for HMLV metalworking environments"
 readme = "README.md"
 license = {text = "MIT"}
@@ -40,6 +40,9 @@ dev = [
 
 [project.scripts]
 metalfab-sim = "metalfab_uns_sim.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "metalfab_uns_sim.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
